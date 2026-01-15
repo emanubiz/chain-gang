@@ -1,0 +1,13 @@
+[workspace]
+resolver = "2"
+members = [
+    "game_shared",
+    "game_server",
+    "game_client"
+]
+
+# Ottimizzazioni per il Web (WASM deve essere piccolo e veloce)
+[profile.release]
+opt-level = "s"  # Ottimizza per la dimensione (size)
+lto = true       # Link Time Optimization
+codegen-units = 1
