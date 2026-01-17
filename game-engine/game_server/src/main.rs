@@ -149,13 +149,12 @@ fn update_transport(
     time: Res<Time>,
 ) {
     let delta = time.delta();
+    server.update(delta);
     
     // Aggiorna il transport
     if let Err(e) = transport.0.update(delta, &mut *server) {
         eprintln!("❌ Errore transport: {:?}", e);
     }
-    
-    server.update(delta);
 }
 
 fn sync_physics_to_clients(

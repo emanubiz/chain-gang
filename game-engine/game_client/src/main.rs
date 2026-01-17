@@ -74,7 +74,7 @@ fn setup_network(mut commands: Commands) {
         .expect("Impossibile creare NetcodeClientTransport");
 
     commands.insert_resource(client);
-    commands.insert_resource(transport);
+    commands.insert_resource(Transport(transport));
 }
 
 fn update_transport(
@@ -83,6 +83,8 @@ fn update_transport(
     time: Res<Time>,
 ) {
     let delta = time.delta();
+    
+    client.update(delta); // RenetClient's internal update first
     
     // Aggiorna il transport
     match transport.0.update(delta, &mut *client) {
@@ -94,8 +96,6 @@ fn update_transport(
             eprintln!("❌ CLIENT: Errore transport in update: {:?}", e);
         }
     }
-
-    client.update(delta);
 }
 
 fn receive_physics_messages(
