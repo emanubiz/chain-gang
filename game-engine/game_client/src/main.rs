@@ -1,11 +1,10 @@
-// game_client/src/main.rs - Step 1.2: Synchronized Physics
+// game_client/src/main.rs - Step 1.2: Synchronized Physics (Visual Only)
 
 use bevy::prelude::*;
 use game_shared::{hello_shared, PROTOCOL_ID, SERVER_PORT, SERVER_ADDR, PhysicsMessage};
 use bevy_renet::renet::{ConnectionConfig, RenetClient};
 use bevy_renet::renet::transport::{NetcodeClientTransport, ClientAuthentication};
 use bevy_renet::RenetClientPlugin;
-use bevy_rapier3d::prelude::*;
 use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::time::SystemTime;
@@ -37,8 +36,6 @@ fn main() {
         )
         .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.15)))
         .add_plugins(RenetClientPlugin)
-        .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
-        .add_plugins(RapierDebugRenderPlugin::default())
         .insert_resource(SynchronizedEntities::default())
         .add_systems(Startup, (setup_level, setup_network).chain())
         .add_systems(Update, (
@@ -102,7 +99,19 @@ fn receive_physics_messages(
     mut query: Query<&mut Transform>,
     time: Res<Time>,
 ) {
+    // Debug: verifica che il sistema giri
+    static mut FIRST_RUN: bool = true;
+    unsafe {
+        if FIRST_RUN {
+            println!("🟢 CLIENT: Sistema receive_physics_messages attivo!");
+            FIRST_RUN = false;
+        }
+    }
+    
     let mut message_count = 0;
+    
+    // Debug: verifica se il client è connesso
+    let is_connected = client.is_connected();
     
     // Ricevi tutti i messaggi dal canale 0 (fisica)
     while let Some(message) = client.receive_message(0) {
@@ -133,12 +142,20 @@ fn receive_physics_messages(
                     }
                 }
             }
+        } else {
+            println!("⚠️ CLIENT: Errore deserializzazione messaggio");
         }
     }
     
-    // Debug: stampa ogni 2 secondi quanti messaggi riceviamo
-    if message_count > 0 && (time.elapsed_seconds() / 2.0).floor() != ((time.elapsed_seconds() - time.delta_seconds()) / 2.0).floor() {
-        println!("📨 CLIENT: Ricevuti {} messaggi di fisica", message_count);
+    // Debug: stampa ogni 2 secondi
+    if (time.elapsed_seconds() / 2.0).floor() != ((time.elapsed_seconds() - time.delta_seconds()) / 2.0).floor() {
+        if !is_connected {
+            println!("❌ CLIENT: NON connesso al server!");
+        } else if message_count == 0 {
+            println!("⚠️ CLIENT: Connesso ma 0 messaggi ricevuti in questo frame");
+        } else {
+            println!("✅ CLIENT: Ricevuti {} messaggi in questo frame", message_count);
+        }
     }
 }
 

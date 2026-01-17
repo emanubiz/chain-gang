@@ -1,10 +1,11 @@
+// game_server/src/main.rs - Step 1.2: Synchronized Physics (Simple Manual Physics)
+
 use bevy::prelude::*;
 use bevy::app::ScheduleRunnerPlugin;
 use game_shared::{hello_shared, PROTOCOL_ID, SERVER_PORT, SERVER_ADDR, PhysicsMessage};
 use bevy_renet::renet::{ConnectionConfig, RenetServer, ServerEvent};
 use bevy_renet::renet::transport::{NetcodeServerTransport, ServerAuthentication, ServerConfig};
 use bevy_renet::RenetServerPlugin;
-use bevy_rapier3d::prelude::*;
 use std::net::UdpSocket;
 use std::time::{Duration, SystemTime};
 
@@ -16,78 +17,39 @@ struct Transport(NetcodeServerTransport);
 #[derive(Resource)]
 struct SynchronizedCube(Entity);
 
+// Componente per la fisica manuale
+#[derive(Component)]
+struct PhysicsBody {
+    velocity: Vec3,
+    gravity: f32,
+    bounciness: f32,
+}
+
+// Componente per i collider (AABB semplice)
+#[derive(Component)]
+struct BoxCollider {
+    half_extents: Vec3,
+}
+
 fn main() {
     println!("🔥 SERVER: Avvio in corso...");
     hello_shared();
 
-    let mut app = App::new();
-    
-    app.add_plugins(
+    App::new()
+        .add_plugins(
             MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(
-                Duration::from_secs_f64(1.0 / 60.0)
+                Duration::from_secs_f64(1.0 / 60.0) // 60 tick al secondo
             ))
         )
-        .add_plugins(RenetServerPlugin);
-    
-    // Aggiungiamo Rapier manualmente con TUTTI gli eventi e risorse necessarie
-    app.init_resource::<RapierContext>()
-        .init_resource::<Events<CollisionEvent>>()
-        .init_resource::<Events<ContactForceEvent>>()
-        .init_resource::<Events<MassModifiedEvent>>()
-        .init_resource::<SimulationToRenderTime>()
-        .insert_resource(RapierConfiguration {
-            gravity: Vec3::Y * -9.81,
-            physics_pipeline_active: true,
-            query_pipeline_active: true,
-            timestep_mode: TimestepMode::Variable {
-                max_dt: 1.0 / 60.0,
-                time_scale: 1.0,
-                substeps: 1,
-            },
-            scaled_shape_subdivision: 10,
-            force_update_from_transform_changes: false,
-        });
-    
-    // Sistemi in First (prima di tutto)
-    app.add_systems(
-        First,
-        bevy_rapier3d::plugin::systems::sync_removals,
-    );
-    
-    // Sistemi in PreUpdate (prima dell'update principale)
-    app.add_systems(
-        PreUpdate,
-        (
-            bevy_rapier3d::plugin::systems::apply_scale,
-            bevy_rapier3d::plugin::systems::apply_collider_user_changes,
-            bevy_rapier3d::plugin::systems::apply_rigid_body_user_changes,
-            bevy_rapier3d::plugin::systems::apply_joint_user_changes,
-            bevy_rapier3d::plugin::systems::apply_initial_rigid_body_impulses,
-        ).chain(),
-    );
-    
-    // Step della simulazione in Update
-    app.add_systems(
-        Update,
-        bevy_rapier3d::plugin::systems::step_simulation::<NoUserData>,
-    );
-    
-    // Writeback in PostUpdate (dopo l'update)
-    app.add_systems(
-        PostUpdate,
-        (
-            bevy_rapier3d::plugin::systems::update_colliding_entities,
-            bevy_rapier3d::plugin::systems::writeback_rigid_bodies,
-        ),
-    );
-    
-    app.add_systems(Startup, (setup_network, setup_physics).chain())
+        .add_plugins(RenetServerPlugin)
+        .add_systems(Startup, (setup_network, setup_physics).chain())
         .add_systems(Update, (
             update_transport,
             handle_server_events,
+            apply_physics,        // Sistema di fisica manuale
+            sync_physics_to_clients,
             server_tick,
-        ))
-        .add_systems(PostUpdate, sync_physics_to_clients)
+        ).chain())
         .run();
 }
 
@@ -121,33 +83,64 @@ fn setup_network(mut commands: Commands) {
     commands.insert_resource(Transport(transport));
 }
 
-fn setup_physics(
-    mut commands: Commands,
-) {
-    println!("🔧 SERVER: Setup fisica in corso...");
+fn setup_physics(mut commands: Commands) {
+    println!("🔧 SERVER: Setup fisica manuale in corso...");
     
-    // Spawna il pavimento (collider statico)
+    // Spawna il pavimento (collider statico a y = 0)
     let floor = commands.spawn((
-        RigidBody::Fixed,
-        Collider::cuboid(10.0, 0.5, 10.0),
-        TransformBundle::from(Transform::from_xyz(0.0, -0.5, 0.0)),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        BoxCollider {
+            half_extents: Vec3::new(10.0, 0.5, 10.0),
+        },
     )).id();
     println!("✅ SERVER: Pavimento creato: {:?}", floor);
 
-    // Spawna il cubo che cade (corpo dinamico)
+    // Spawna il cubo che cade
     let cube_entity = commands.spawn((
-        RigidBody::Dynamic,
-        Collider::cuboid(0.5, 0.5, 0.5),
-        TransformBundle::from(Transform::from_xyz(0.0, 5.0, 0.0)),
-        Restitution::coefficient(0.7),
-        Velocity::default(), // Aggiungiamo velocità esplicita
-        GravityScale(1.0),   // Aggiungiamo scala di gravità
+        Transform::from_xyz(0.0, 5.0, 0.0),
+        PhysicsBody {
+            velocity: Vec3::ZERO,
+            gravity: -9.81,
+            bounciness: 0.7, // Coefficiente di rimbalzo
+        },
+        BoxCollider {
+            half_extents: Vec3::new(0.5, 0.5, 0.5),
+        },
     )).id();
 
-    // Salva l'entità del cubo per sincronizzarla
     commands.insert_resource(SynchronizedCube(cube_entity));
     
     println!("✅ SERVER: Cubo fisico spawnato con ID: {:?}", cube_entity);
+}
+
+fn apply_physics(
+    mut query: Query<(&mut Transform, &mut PhysicsBody, &BoxCollider)>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_seconds();
+    
+    for (mut transform, mut body, collider) in query.iter_mut() {
+        // Applica gravità
+        body.velocity.y += body.gravity * dt;
+        
+        // Applica velocità
+        transform.translation += body.velocity * dt;
+        
+        // Collisione semplice con il pavimento (y = 0.5, che è floor_y + floor_half_height + cube_half_height)
+        let ground_level = 0.5 + collider.half_extents.y;
+        
+        if transform.translation.y <= ground_level {
+            transform.translation.y = ground_level;
+            
+            // Rimbalzo
+            body.velocity.y = -body.velocity.y * body.bounciness;
+            
+            // Se la velocità è troppo bassa, ferma il cubo
+            if body.velocity.y.abs() < 0.1 {
+                body.velocity.y = 0.0;
+            }
+        }
+    }
 }
 
 fn update_transport(
@@ -166,36 +159,24 @@ fn update_transport(
 fn sync_physics_to_clients(
     mut server: ResMut<RenetServer>,
     synced_cube: Res<SynchronizedCube>,
-    query: Query<(&Transform, Option<&Velocity>)>,
-    context: Res<RapierContext>,
+    query: Query<(&Transform, &PhysicsBody)>,
     time: Res<Time>,
 ) {
-    // Debug: stampa ogni 2 secondi info sulla fisica
-    if (time.elapsed_seconds() / 2.0).floor() != ((time.elapsed_seconds() - time.delta_seconds()) / 2.0).floor() {
-        let client_count = server.clients_id().len();
-        if client_count > 0 {
-            println!("🔄 Sincronizzando fisica con {} client(i)", client_count);
-        }
-        
-        // Debug: verifica se il RapierContext ha entità
-        println!("🔍 DEBUG: Entità nel RapierContext: {}", context.entity2body().len());
-    }
-
     // Ottieni la transform del cubo
-    if let Ok((transform, velocity)) = query.get(synced_cube.0) {
+    if let Ok((transform, body)) = query.get(synced_cube.0) {
         let message = PhysicsMessage::RigidBodyUpdate {
             entity_id: synced_cube.0.index() as u64,
             position: transform.translation,
             rotation: transform.rotation,
         };
 
-        // Debug: stampa la posizione e velocità del cubo
+        // Debug: stampa la posizione del cubo ogni 2 secondi
         if (time.elapsed_seconds() / 2.0).floor() != ((time.elapsed_seconds() - time.delta_seconds()) / 2.0).floor() {
-            if let Some(vel) = velocity {
-                println!("📦 Cubo a posizione: {:?}, velocità: {:?}", transform.translation, vel.linvel);
-            } else {
-                println!("📦 Cubo a posizione: {:?}, NO VELOCITY COMPONENT", transform.translation);
+            let client_count = server.clients_id().len();
+            if client_count > 0 {
+                println!("🔄 Sincronizzando con {} client(i)", client_count);
             }
+            println!("📦 Cubo: pos={:.2?}, vel={:.2?}", transform.translation, body.velocity);
         }
 
         // Serializza e invia a tutti i client connessi

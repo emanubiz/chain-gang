@@ -7,5 +7,4 @@ edition = "2021"
 game_shared = { path = "../game_shared" }
 bevy = { version = "0.14", default-features = false, features = ["multi_threaded"] }
 bevy_renet = "0.0.12"
-bevy_rapier3d = { version = "0.27", default-features = false, features = ["dim3"] }
 bincode = "1.3"
