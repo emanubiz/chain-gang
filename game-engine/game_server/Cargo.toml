@@ -6,4 +6,4 @@ edition = "2021"
 [dependencies]
 game_shared = { path = "../game_shared" }
 bevy = { version = "0.14", default-features = false, features = ["multi_threaded"] }
-bevy_renet = { version = "0.0.12", features = ["transport"] } # Transport serve per UDP
+bevy_renet = "0.0.12"
