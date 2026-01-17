@@ -42,7 +42,7 @@ fn main() {
             update_transport,
             receive_physics_messages,
             client_tick,
-        ))
+        ).chain())
         .run();
 }
 
@@ -74,7 +74,7 @@ fn setup_network(mut commands: Commands) {
         .expect("Impossibile creare NetcodeClientTransport");
 
     commands.insert_resource(client);
-    commands.insert_resource(Transport(transport));
+    commands.insert_resource(transport);
 }
 
 fn update_transport(
@@ -85,9 +85,17 @@ fn update_transport(
     let delta = time.delta();
     
     // Aggiorna il transport
-    if let Err(e) = transport.0.update(delta, &mut *client) {
-        eprintln!("❌ Errore transport: {:?}", e);
+    match transport.0.update(delta, &mut *client) {
+        Ok(_) => {
+            // Debug: Logga ogni frame per confermare che il transport sta processando
+            println!("🔄 CLIENT: Transport update Ok. Delta: {:?}", delta);
+        },
+        Err(e) => {
+            eprintln!("❌ CLIENT: Errore transport in update: {:?}", e);
+        }
     }
+
+    client.update(delta);
 }
 
 fn receive_physics_messages(

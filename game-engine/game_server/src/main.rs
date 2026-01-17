@@ -154,6 +154,8 @@ fn update_transport(
     if let Err(e) = transport.0.update(delta, &mut *server) {
         eprintln!("❌ Errore transport: {:?}", e);
     }
+    
+    server.update(delta);
 }
 
 fn sync_physics_to_clients(
@@ -176,12 +178,14 @@ fn sync_physics_to_clients(
             if client_count > 0 {
                 println!("🔄 Sincronizzando con {} client(i)", client_count);
             }
-            println!("📦 Cubo: pos={:.2?}, vel={:.2?}", transform.translation, body.velocity);
+            println!("📦 Cubo: pos={:.2?}, vel={:.2?}, rot={:.2?}", transform.translation, body.velocity, transform.rotation);
         }
 
         // Serializza e invia a tutti i client connessi
         if let Ok(message_data) = bincode::serialize(&message) {
+            let message_size = message_data.len();
             for client_id in server.clients_id() {
+                 println!("[SERVER SEND] In coda messaggio per client {}, dimensione: {} bytes", client_id, message_size);
                 server.send_message(client_id, 0, message_data.clone());
             }
         }
