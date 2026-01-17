@@ -1,13 +1,25 @@
-// game_shared/src/lib.rs
-
 use bevy::prelude::*;
+use serde::{Deserialize, Serialize};
 
+/// Componente che rappresenta un giocatore nel gioco
 #[derive(Component)]
 pub struct Player {
     pub id: u64,
     pub username: String,
 }
 
+/// Messaggi di fisica scambiati tra server e client
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum PhysicsMessage {
+    /// Aggiornamento della posizione e rotazione di un corpo rigido
+    RigidBodyUpdate {
+        entity_id: u64,
+        position: Vec3,
+        rotation: Quat,
+    },
+}
+
+/// Costanti di rete
 pub const PROTOCOL_ID: u64 = 7;
 pub const SERVER_PORT: u16 = 5000;
 pub const SERVER_ADDR: &str = "127.0.0.1";

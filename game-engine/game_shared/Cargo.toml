@@ -5,5 +5,6 @@ edition = "2021"
 
 [dependencies]
 bevy = { version = "0.14", default-features = false }
-serde = { version = "1.0", features = ["derive"] } # Serve per impacchettare i messaggi
-bevy_renet = "0.0.12" # Libreria di rete compatibile con Bevy 0.14
+serde = { version = "1.0", features = ["derive"] }
+bevy_renet = "0.0.12"
+bevy_rapier3d = { version = "0.27", default-features = false }
