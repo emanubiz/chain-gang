@@ -204,6 +204,87 @@ fn apply_local_prediction(
     }
 }
 
+/// Spawna un personaggio voxel umano (stile Minecraft)
+fn spawn_voxel_player(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<StandardMaterial>>,
+    position: Vec3,
+    color: Color,
+) -> Entity {
+    // Materiale del personaggio
+    let material = materials.add(color);
+    
+    // Parent entity (punto di controllo centrale)
+    let player_entity = commands.spawn((
+        PlayerPhysics::default(),
+        SpatialBundle {
+            transform: Transform::from_translation(position),
+            ..default()
+        },
+    )).id();
+    
+    // Testa (cubo 0.4x0.4x0.4)
+    let head = commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(0.4, 0.4, 0.4)),
+        material: material.clone(),
+        transform: Transform::from_xyz(0.0, 0.7, 0.0), // Sopra il corpo
+        ..default()
+    }).id();
+    
+    // Corpo (0.5 wide, 0.7 tall, 0.3 deep)
+    let body = commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(0.5, 0.7, 0.3)),
+        material: material.clone(),
+        transform: Transform::from_xyz(0.0, 0.2, 0.0),
+        ..default()
+    }).id();
+    
+    // Braccio sinistro
+    let left_arm = commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(0.2, 0.6, 0.2)),
+        material: material.clone(),
+        transform: Transform::from_xyz(-0.4, 0.2, 0.0),
+        ..default()
+    }).id();
+    
+    // Braccio destro
+    let right_arm = commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(0.2, 0.6, 0.2)),
+        material: material.clone(),
+        transform: Transform::from_xyz(0.4, 0.2, 0.0),
+        ..default()
+    }).id();
+    
+    // Gamba sinistra
+    let left_leg = commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(0.2, 0.6, 0.2)),
+        material: material.clone(),
+        transform: Transform::from_xyz(-0.15, -0.5, 0.0),
+        ..default()
+    }).id();
+    
+    // Gamba destra
+    let right_leg = commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(0.2, 0.6, 0.2)),
+        material: material.clone(),
+        transform: Transform::from_xyz(0.15, -0.5, 0.0),
+        ..default()
+    }).id();
+    
+    // Attacca tutte le parti al parent
+    commands.entity(player_entity).push_children(&[
+        head,
+        body,
+        left_arm,
+        right_arm,
+        left_leg,
+        right_leg,
+    ]);
+    
+    player_entity
+}
+
 fn receive_network_messages(
     mut commands: Commands,
     mut client: ResMut<RenetClient>,
@@ -224,30 +305,27 @@ fn receive_network_messages(
                     
                     // Se è il giocatore locale, salvalo
                     if our_client_id.0 == client_id {
-                        let player_entity = commands.spawn((
-                            PlayerController::default(),
-                            PlayerPhysics::default(),
-                            PbrBundle {
-                                mesh: meshes.add(Capsule3d::new(PLAYER_RADIUS, PLAYER_HEIGHT)),
-                                material: materials.add(Color::srgb(0.2, 0.8, 0.2)), // Verde per il locale
-                                transform: Transform::from_xyz(0.0, 2.0, 0.0),
-                                ..default()
-                            },
-                        )).id();
+                        let player_entity = spawn_voxel_player(
+                            &mut commands,
+                            &mut meshes,
+                            &mut materials,
+                            Vec3::new(0.0, 2.0, 0.0),
+                            Color::srgb(0.2, 0.8, 0.2), // Verde per il locale
+                        );
                         
+                        // Aggiungi il controller solo al locale
+                        commands.entity(player_entity).insert(PlayerController::default());
                         commands.insert_resource(LocalPlayer(player_entity));
                         synchronized_entities.map.insert(entity_id, player_entity);
                     } else {
-                        // Giocatore remoto - aggiungi anche i componenti per ricevere gli update
-                        let remote_entity = commands.spawn((
-                            PlayerPhysics::default(),
-                            PbrBundle {
-                                mesh: meshes.add(Capsule3d::new(PLAYER_RADIUS, PLAYER_HEIGHT)),
-                                material: materials.add(Color::srgb(0.8, 0.2, 0.2)), // Rosso per i remoti
-                                transform: Transform::from_xyz(0.0, 2.0, 0.0),
-                                ..default()
-                            },
-                        )).id();
+                        // Giocatore remoto
+                        let remote_entity = spawn_voxel_player(
+                            &mut commands,
+                            &mut meshes,
+                            &mut materials,
+                            Vec3::new(0.0, 2.0, 0.0),
+                            Color::srgb(0.8, 0.2, 0.2), // Rosso per i remoti
+                        );
                         
                         synchronized_entities.map.insert(entity_id, remote_entity);
                     }
