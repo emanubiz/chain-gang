@@ -68,7 +68,7 @@ impl Default for PlayerController {
     fn default() -> Self {
         Self {
             move_speed: 5.0,
-            jump_force: 5.0,
+            jump_force: 7.5, // 🔥 Forza salto aumentata per compensare gravità
             grounded: false,
         }
     }
@@ -85,7 +85,7 @@ impl Default for PlayerPhysics {
     fn default() -> Self {
         Self {
             velocity: Vec3::ZERO,
-            gravity: -9.81,
+            gravity: -18.0, // 🔥 Gravità aumentata per salti più realistici
         }
     }
 }
@@ -102,23 +102,23 @@ pub const PLAYER_HEIGHT: f32 = 1.8;
 // ── NUOVE COSTANTI VOXEL PERSONAGGIO ───────────────────────────────────────
 pub const VOXEL_SCALE: f32 = 0.18;
 
-pub const HEAD_SIZE: f32 = 0.42;
-pub const HEAD_Y_OFFSET: f32 = 1.38;
+pub const HEAD_SIZE: f32 = 0.44; // 🔥 Testa leggermente più grande
+pub const HEAD_Y_OFFSET: f32 = 1.32; // 🔥 Abbassata per ancoraggio al suolo
 
-pub const BODY_WIDTH: f32 = 0.38;
+pub const BODY_WIDTH: f32 = 0.40; // 🔥 Corpo un po' più largo
 pub const BODY_DEPTH: f32 = 0.28;
 pub const BODY_HEIGHT: f32 = 0.68;
-pub const BODY_Y_OFFSET: f32 = 0.70;
+pub const BODY_Y_OFFSET: f32 = 0.64; // 🔥 Abbassato
 
 pub const ARM_WIDTH: f32 = 0.16;
 pub const ARM_DEPTH: f32 = 0.16;
 pub const ARM_HEIGHT: f32 = 0.62;
-pub const ARM_Y_OFFSET: f32 = 0.70;
+pub const ARM_Y_OFFSET: f32 = 0.64; // 🔥 Abbassato
 
 pub const LEG_WIDTH: f32 = 0.18;
 pub const LEG_DEPTH: f32 = 0.18;
-pub const LEG_HEIGHT: f32 = 0.70;
-pub const LEG_Y_OFFSET: f32 = 0.0;
+pub const LEG_HEIGHT: f32 = 0.68; // 🔥 Gambe leggermente più lunghe
+pub const LEG_Y_OFFSET: f32 = 0.0; // 🔥 Ancorate al suolo
 
 // Funzione condivisa per applicare il movimento del giocatore
 pub fn apply_player_movement(

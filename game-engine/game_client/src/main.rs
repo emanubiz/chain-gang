@@ -78,13 +78,13 @@ fn main() {
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
                     title: "CHAIN GANG - Client".into(),
-                    resolution: (800., 600.).into(),
+                    resolution: (1280., 720.).into(),
                     ..default()
                 }),
                 ..default()
             }),
         )
-        .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.15)))
+        .insert_resource(ClearColor(Color::srgb(0.15, 0.18, 0.25)))
         .add_plugins(RenetClientPlugin)
         .insert_resource(SynchronizedEntities::default())
         .insert_resource(InputHistory::default())
@@ -220,13 +220,22 @@ fn update_camera_position(
     if let Some(local_player) = local_player {
         if let Ok(player_transform) = player_query.get(local_player.0) {
             if let Ok(mut camera_transform) = camera_query.get_single_mut() {
-                // Posizione camera: testa del giocatore (y = 0.6 dalla base)
-                let eye_height = 0.6;
-                camera_transform.translation = player_transform.translation + Vec3::new(0.0, eye_height, 0.0);
+                // 🔥 Camera MOLTO più alta e lontana (third-person)
+                let eye_height = 2.5; // Molto più alta
+                let back_offset = 3.5; // Molto più lontana
+                let up_offset = 1.0;   // Guardando leggermente dall'alto
                 
-                // Rotazione camera: yaw dal giocatore + pitch dalla camera
+                let yaw_quat = Quat::from_rotation_y(camera_rotation.yaw);
+                let backward = yaw_quat * Vec3::new(0.0, 0.0, back_offset);
+                
+                camera_transform.translation = player_transform.translation 
+                    + Vec3::new(0.0, eye_height + up_offset, 0.0)
+                    + backward;
+                
+                // Camera guarda leggermente verso il basso
+                let look_down = -0.3; // Pitch verso il basso
                 camera_transform.rotation = Quat::from_rotation_y(camera_rotation.yaw) 
-                    * Quat::from_rotation_x(camera_rotation.pitch);
+                    * Quat::from_rotation_x(camera_rotation.pitch + look_down);
             }
         }
     }
@@ -258,8 +267,6 @@ fn apply_local_prediction(
     }
 }
 
-/// Spawna un personaggio voxel umano (stile Minecraft)
-/// Spawna un personaggio voxel umano (stile Minecraft)
 fn spawn_voxel_player(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
@@ -268,26 +275,47 @@ fn spawn_voxel_player(
     base_color: Color,
 ) -> Entity {
     use game_shared::*;
+    use std::f32::consts::PI;
 
-    // Helper per scurire un colore (~12% più scuro)
-    let darken = |c: Color| -> Color {
-        let srgba = Srgba::from(c);
-        Color::Srgba(Srgba {
-            red: srgba.red * 0.88,
-            green: srgba.green * 0.88,
-            blue: srgba.blue * 0.88,
-            alpha: srgba.alpha,
-        })
-    };
+    // 🔥 VARIANTI CASUALI per personaggi stilosi
+    let style_variants = [
+        // Stile 1: Cool guy con occhiali
+        (
+            Color::srgb(0.96, 0.82, 0.70), // Skin chiara
+            Color::srgb(1.0, 0.85, 0.0),   // Capelli biondi
+            Color::srgb(0.1, 0.6, 0.9),    // Shirt azzurra
+            Color::srgb(0.2, 0.2, 0.8),    // Pantaloni blu
+            true, // Ha occhiali
+        ),
+        // Stile 2: Ragazza capelli rossi
+        (
+            Color::srgb(0.98, 0.78, 0.69), // Skin media
+            Color::srgb(0.8, 0.2, 0.2),    // Capelli rossi
+            Color::srgb(0.9, 0.5, 0.7),    // Shirt rosa
+            Color::srgb(0.3, 0.2, 0.6),    // Pantaloni viola
+            false,
+        ),
+        // Stile 3: Skater
+        (
+            Color::srgb(0.85, 0.65, 0.50), // Skin scura
+            Color::srgb(0.15, 0.12, 0.10), // Capelli neri
+            Color::srgb(0.9, 0.1, 0.1),    // Shirt rossa
+            Color::srgb(0.15, 0.15, 0.15), // Pantaloni neri
+            true, // Ha cappellino
+        ),
+    ];
+    
+    // Scegli variante basata sul colore base
+    let variant_index = if base_color.to_srgba().red > 0.5 { 0 } else if base_color.to_srgba().green > 0.5 { 1 } else { 2 };
+    let (skin_color, hair_color, shirt_color, pants_color, has_accessory) = style_variants[variant_index];
 
     // Materiali
-    let skin_mat  = materials.add(Color::srgb(0.96, 0.78, 0.69));
-    let shirt_mat = materials.add(darken(base_color));
-    let pants_mat = materials.add(Color::srgb(0.22, 0.22, 0.55));
-    let shoe_mat  = materials.add(Color::srgb(0.15, 0.12, 0.10));
-    let eye_mat   = materials.add(Color::srgb(0.05, 0.05, 0.08));
-    let mouth_mat = materials.add(Color::srgb(0.78, 0.22, 0.25));
-    let hair_mat  = materials.add(Color::srgb(0.28, 0.18, 0.08));
+    let skin_mat = materials.add(skin_color);
+    let hair_mat = materials.add(hair_color);
+    let shirt_mat = materials.add(shirt_color);
+    let pants_mat = materials.add(pants_color);
+    let shoe_mat = materials.add(Color::srgb(0.95, 0.95, 0.95)); // Scarpe bianche
+    let accessory_mat = materials.add(Color::srgb(0.1, 0.1, 0.1));
 
     // Parent entity
     let parent = commands.spawn((
@@ -306,66 +334,122 @@ fn spawn_voxel_player(
         ..default()
     }).id();
 
-    // Occhi
-    let eye_size = VOXEL_SCALE * 1.4;
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(eye_size, eye_size, VOXEL_SCALE * 0.6)),
-        material: eye_mat.clone(),
-        transform: Transform::from_xyz(-0.11, 0.09, HEAD_SIZE/2.0 + 0.01),
+    // 🔥 OCCHI STILOSI - Grandi e espressivi
+    let eye_size = VOXEL_SCALE * 1.8;
+    let eye_white_mat = materials.add(Color::srgb(1.0, 1.0, 1.0));
+    let pupil_mat = materials.add(Color::srgb(0.05, 0.05, 0.1));
+    
+    let left_eye_white = commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(eye_size, eye_size * 1.2, VOXEL_SCALE * 0.8)),
+        material: eye_white_mat.clone(),
+        transform: Transform::from_xyz(-0.13, 0.12, HEAD_SIZE/2.0 + 0.03),
         ..default()
-    }).set_parent(head);
-
+    }).id();
+    
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(eye_size, eye_size, VOXEL_SCALE * 0.6)),
-        material: eye_mat,
-        transform: Transform::from_xyz(0.11, 0.09, HEAD_SIZE/2.0 + 0.01),
+        mesh: meshes.add(Cuboid::new(eye_size * 0.6, eye_size * 0.6, VOXEL_SCALE * 0.4)),
+        material: pupil_mat.clone(),
+        transform: Transform::from_xyz(0.0, -0.05, 0.05),
         ..default()
-    }).set_parent(head);
-
-    // Bocca
+    }).set_parent(left_eye_white);
+    
+    let right_eye_white = commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(eye_size, eye_size * 1.2, VOXEL_SCALE * 0.8)),
+        material: eye_white_mat,
+        transform: Transform::from_xyz(0.13, 0.12, HEAD_SIZE/2.0 + 0.03),
+        ..default()
+    }).id();
+    
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(0.18, 0.05, 0.04)),
+        mesh: meshes.add(Cuboid::new(eye_size * 0.6, eye_size * 0.6, VOXEL_SCALE * 0.4)),
+        material: pupil_mat,
+        transform: Transform::from_xyz(0.0, -0.05, 0.05),
+        ..default()
+    }).set_parent(right_eye_white);
+    
+    commands.entity(head).push_children(&[left_eye_white, right_eye_white]);
+
+    // 🔥 BOCCA SORRIDENTE più ampia
+    let mouth_mat = materials.add(Color::srgb(0.85, 0.3, 0.35));
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(0.20, 0.05, 0.04)),
         material: mouth_mat,
-        transform: Transform::from_xyz(0.0, -0.08, HEAD_SIZE/2.0 + 0.01),
+        transform: Transform::from_xyz(0.0, -0.10, HEAD_SIZE/2.0 + 0.02),
         ..default()
     }).set_parent(head);
 
-    // Capelli
+    // 🔥 CAPELLI STILOSI - Più voluminosi
+    let hair_main = commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(HEAD_SIZE * 1.1, 0.25, HEAD_SIZE * 1.1)),
+        material: hair_mat.clone(),
+        transform: Transform::from_xyz(0.0, HEAD_SIZE/2.0 + 0.10, 0.0),
+        ..default()
+    }).id();
+    
+    // Ciuffo frontale
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(HEAD_SIZE * 1.05, 0.22, HEAD_SIZE * 1.05)),
-        material: hair_mat,
-        transform: Transform::from_xyz(0.0, HEAD_SIZE/2.0 + 0.09, 0.0),
+        mesh: meshes.add(Cuboid::new(0.15, 0.12, 0.12)),
+        material: hair_mat.clone(),
+        transform: Transform::from_xyz(0.08, 0.10, HEAD_SIZE/2.0 + 0.05),
         ..default()
     }).set_parent(head);
+    
+    commands.entity(head).add_child(hair_main);
+
+    // 🔥 ACCESSORI (occhiali o cappellino)
+    if has_accessory && variant_index == 0 {
+        // Occhiali da sole
+        let glasses_mat = materials.add(Color::srgb(0.1, 0.1, 0.1));
+        commands.spawn(PbrBundle {
+            mesh: meshes.add(Cuboid::new(0.30, 0.12, 0.04)),
+            material: glasses_mat,
+            transform: Transform::from_xyz(0.0, 0.10, HEAD_SIZE/2.0 + 0.04),
+            ..default()
+        }).set_parent(head);
+    } else if has_accessory {
+        // Cappellino
+        commands.spawn(PbrBundle {
+            mesh: meshes.add(Cuboid::new(HEAD_SIZE * 1.15, 0.10, HEAD_SIZE * 1.15)),
+            material: accessory_mat.clone(),
+            transform: Transform::from_xyz(0.0, HEAD_SIZE/2.0 + 0.22, 0.0),
+            ..default()
+        }).set_parent(head);
+        
+        // Visiera
+        commands.spawn(PbrBundle {
+            mesh: meshes.add(Cuboid::new(HEAD_SIZE * 1.2, 0.02, 0.25)),
+            material: accessory_mat,
+            transform: Transform::from_xyz(0.0, HEAD_SIZE/2.0 + 0.18, HEAD_SIZE/2.0 + 0.15),
+            ..default()
+        }).set_parent(head);
+    }
 
     // CORPO
     let body = commands.spawn(PbrBundle {
         mesh: meshes.add(Cuboid::new(BODY_WIDTH, BODY_HEIGHT, BODY_DEPTH)),
-        material: shirt_mat.clone(),          // ← CLONE
+        material: shirt_mat.clone(),
         transform: Transform::from_xyz(0.0, BODY_Y_OFFSET, 0.0),
         ..default()
     }).id();
 
     // BRACCIA
     let arm_offset_x = BODY_WIDTH / 2.0 + ARM_WIDTH / 2.0;
-
     commands.spawn(PbrBundle {
         mesh: meshes.add(Cuboid::new(ARM_WIDTH, ARM_HEIGHT, ARM_DEPTH)),
-        material: shirt_mat.clone(),          // ← CLONE
+        material: shirt_mat.clone(),
         transform: Transform::from_xyz(-arm_offset_x, ARM_Y_OFFSET, 0.0),
         ..default()
     }).set_parent(body);
 
     commands.spawn(PbrBundle {
         mesh: meshes.add(Cuboid::new(ARM_WIDTH, ARM_HEIGHT, ARM_DEPTH)),
-        material: shirt_mat.clone(),          // ← CLONE
+        material: shirt_mat.clone(),
         transform: Transform::from_xyz(arm_offset_x, ARM_Y_OFFSET, 0.0),
         ..default()
     }).set_parent(body);
 
     // GAMBE
     let leg_offset_x = BODY_WIDTH * 0.25;
-
     commands.spawn(PbrBundle {
         mesh: meshes.add(Cuboid::new(LEG_WIDTH, LEG_HEIGHT, LEG_DEPTH)),
         material: pants_mat.clone(),
@@ -380,23 +464,43 @@ fn spawn_voxel_player(
         ..default()
     }).set_parent(body);
 
-    // Scarpe
-    let shoe_height = 0.08;
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(LEG_WIDTH * 1.1, shoe_height, LEG_DEPTH * 1.1)),
+    // 🔥 SCARPE STILOSE - Tipo sneaker
+    let shoe_height = 0.10;
+    let shoe_platform = 0.04;
+    
+    // Scarpa sinistra
+    let left_shoe = commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(LEG_WIDTH * 1.15, shoe_height, LEG_DEPTH * 1.3)),
         material: shoe_mat.clone(),
-        transform: Transform::from_xyz(-leg_offset_x, shoe_height/2.0, 0.0),
+        transform: Transform::from_xyz(-leg_offset_x, shoe_height/2.0, 0.05),
         ..default()
-    }).set_parent(body);
-
+    }).id();
+    
+    // Suola scarpa sinistra
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(LEG_WIDTH * 1.1, shoe_height, LEG_DEPTH * 1.1)),
-        material: shoe_mat,
-        transform: Transform::from_xyz(leg_offset_x, shoe_height/2.0, 0.0),
+        mesh: meshes.add(Cuboid::new(LEG_WIDTH * 1.2, shoe_platform, LEG_DEPTH * 1.35)),
+        material: materials.add(Color::srgb(0.2, 0.2, 0.2)),
+        transform: Transform::from_xyz(0.0, -shoe_height/2.0 - shoe_platform/2.0, 0.0),
         ..default()
-    }).set_parent(body);
+    }).set_parent(left_shoe);
+    
+    // Scarpa destra
+    let right_shoe = commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(LEG_WIDTH * 1.15, shoe_height, LEG_DEPTH * 1.3)),
+        material: shoe_mat,
+        transform: Transform::from_xyz(leg_offset_x, shoe_height/2.0, 0.05),
+        ..default()
+    }).id();
+    
+    // Suola scarpa destra
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(LEG_WIDTH * 1.2, shoe_platform, LEG_DEPTH * 1.35)),
+        material: materials.add(Color::srgb(0.2, 0.2, 0.2)),
+        transform: Transform::from_xyz(0.0, -shoe_height/2.0 - shoe_platform/2.0, 0.0),
+        ..default()
+    }).set_parent(right_shoe);
 
-    // Colleghiamo testa e corpo al parent
+    commands.entity(body).push_children(&[left_shoe, right_shoe]);
     commands.entity(parent).push_children(&[head, body]);
 
     parent
@@ -420,28 +524,25 @@ fn receive_network_messages(
                 NetworkMessage::PlayerConnected { entity_id, client_id } => {
                     println!("👤 CLIENT: Player {} connesso (entity: {})", client_id, entity_id);
                     
-                    // Se è il giocatore locale, salvalo
                     if our_client_id.0 == client_id {
                         let player_entity = spawn_voxel_player(
                             &mut commands,
                             &mut meshes,
                             &mut materials,
                             Vec3::new(0.0, 2.0, 0.0),
-                            Color::srgb(0.2, 0.8, 0.2), // Verde per il locale
+                            Color::srgb(0.2, 0.8, 0.2),
                         );
                         
-                        // Aggiungi il controller solo al locale
                         commands.entity(player_entity).insert(PlayerController::default());
                         commands.insert_resource(LocalPlayer(player_entity));
                         synchronized_entities.map.insert(entity_id, player_entity);
                     } else {
-                        // Giocatore remoto
                         let remote_entity = spawn_voxel_player(
                             &mut commands,
                             &mut meshes,
                             &mut materials,
                             Vec3::new(0.0, 2.0, 0.0),
-                            Color::srgb(0.8, 0.2, 0.2), // Rosso per i remoti
+                            Color::srgb(0.8, 0.2, 0.2),
                         );
                         
                         synchronized_entities.map.insert(entity_id, remote_entity);
@@ -455,20 +556,15 @@ fn receive_network_messages(
                 }
                 
                 NetworkMessage::PlayerStateUpdate(state) => {
-                    // Se è il giocatore locale, fai reconciliation
                     if let Some(local_player) = &local_player {
                         if let Some(&entity) = synchronized_entities.map.get(&state.entity_id) {
                             if entity == local_player.0 {
-                                // Reconciliation: rimuovi gli input già processati
                                 input_history.remove_until(state.sequence_number);
                                 
-                                // Aggiorna con lo stato del server
                                 if let Ok((mut transform, mut physics)) = local_query.get_mut(entity) {
                                     transform.translation = state.position;
                                     transform.rotation = state.rotation;
                                     physics.velocity = state.velocity;
-                                    
-                                    // TODO: Riapplica gli input pendenti
                                 }
                                 
                                 continue;
@@ -476,7 +572,6 @@ fn receive_network_messages(
                         }
                     }
                     
-                    // Giocatori remoti: aggiorna direttamente
                     if let Some(&entity) = synchronized_entities.map.get(&state.entity_id) {
                         if let Ok((mut transform, mut physics)) = remote_query.get_mut(entity) {
                             transform.translation = state.position;
@@ -487,15 +582,12 @@ fn receive_network_messages(
                 }
                 
                 NetworkMessage::RigidBodyUpdate { entity_id, position, rotation } => {
-                    // Cubo che cade - usa una query semplice senza filtri
                     if let Some(&entity) = synchronized_entities.map.get(&entity_id) {
-                        // Prova prima con remote_query (il cubo non ha PlayerController)
                         if let Ok((mut transform, _)) = remote_query.get_mut(entity) {
                             transform.translation = position;
                             transform.rotation = rotation;
                         }
                     } else {
-                        // Spawna il cubo
                         let cube_entity = commands.spawn(PbrBundle {
                             mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
                             material: materials.add(Color::srgb(0.8, 0.2, 0.2)),
@@ -543,39 +635,85 @@ fn setup_level(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // Pavimento
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(20.0, 1.0, 20.0)),
-        material: materials.add(Color::srgb(0.3, 0.5, 0.3)),
-        transform: Transform::from_xyz(0.0, -0.5, 0.0),
-        ..default()
-    });
+    // Pavimento voxel con grid pattern
+    let floor_size = 20.0;
+    let tile_size = 2.0;
+    let tiles_per_side = (floor_size / tile_size) as i32;
+    
+    for x in -tiles_per_side/2..tiles_per_side/2 {
+        for z in -tiles_per_side/2..tiles_per_side/2 {
+            let is_dark = (x + z) % 2 == 0;
+            let color = if is_dark {
+                Color::srgb(0.25, 0.35, 0.25)
+            } else {
+                Color::srgb(0.35, 0.45, 0.35)
+            };
+            
+            commands.spawn(PbrBundle {
+                mesh: meshes.add(Cuboid::new(tile_size, 0.2, tile_size)),
+                material: materials.add(color),
+                transform: Transform::from_xyz(
+                    x as f32 * tile_size + tile_size / 2.0,
+                    -0.1,
+                    z as f32 * tile_size + tile_size / 2.0
+                ),
+                ..default()
+            });
+        }
+    }
 
-    // Luce
+    // Luce principale
     commands.spawn(PointLightBundle {
         point_light: PointLight {
-            intensity: 1500.0,
+            intensity: 3000.0,
             shadows_enabled: true,
+            color: Color::srgb(1.0, 0.98, 0.95),
+            shadow_depth_bias: 0.02,
+            shadow_normal_bias: 0.6,
             ..default()
         },
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
+        transform: Transform::from_xyz(0.0, 12.0, 0.0),
+        ..default()
+    });
+    
+    // Luce secondaria
+    commands.spawn(PointLightBundle {
+        point_light: PointLight {
+            intensity: 800.0,
+            shadows_enabled: false,
+            color: Color::srgb(0.7, 0.8, 1.0),
+            ..default()
+        },
+        transform: Transform::from_xyz(-8.0, 6.0, -8.0),
         ..default()
     });
 
-    // Camera FPS
+    // Camera FPS con FOV aumentato
     let camera = commands.spawn(Camera3dBundle {
+        projection: Projection::Perspective(PerspectiveProjection {
+            fov: 90.0_f32.to_radians(),
+            ..default()
+        }),
         transform: Transform::from_xyz(0.0, 2.0, 0.0),
         ..default()
     }).id();
     
-    // Arma (cubo voxel che rappresenta un mitra)
+    // Arma
     let weapon = commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(0.1, 0.05, 0.3)), // Lungo e stretto
-        material: materials.add(Color::srgb(0.2, 0.2, 0.2)), // Grigio scuro
-        transform: Transform::from_xyz(0.3, -0.2, -0.4), // Destra, basso, davanti
+        mesh: meshes.add(Cuboid::new(0.12, 0.06, 0.35)),
+        material: materials.add(Color::srgb(0.15, 0.15, 0.18)),
+        transform: Transform::from_xyz(0.35, -0.25, -0.5),
         ..default()
     }).id();
     
-    // Attacca l'arma alla camera
+    // Mirino arma
+    let sight = commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(0.04, 0.04, 0.04)),
+        material: materials.add(Color::srgb(0.8, 0.1, 0.1)),
+        transform: Transform::from_xyz(0.0, 0.05, -0.12),
+        ..default()
+    }).id();
+    
+    commands.entity(weapon).add_child(sight);
     commands.entity(camera).add_child(weapon);
 }
