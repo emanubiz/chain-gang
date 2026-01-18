@@ -4,9 +4,9 @@ use bevy::prelude::*;
 use bevy_renet::renet::{ConnectionConfig, RenetClient};
 use bevy_renet::renet::transport::{NetcodeClientTransport, ClientAuthentication};
 
-// Importa direttamente i tipi necessari da game_shared
 use game_shared::{
-    PROTOCOL_ID, SERVER_ADDR, SERVER_PORT,
+    PROTOCOL_ID,
+    GameConfig,
     NetworkMessage, PlayerController, PlayerPhysics
 };
 use std::collections::HashMap;
@@ -28,7 +28,8 @@ pub struct SynchronizedEntities {
 }
 
 pub fn setup_network(mut commands: Commands) {
-    let server_addr = format!("{}:{}", SERVER_ADDR, SERVER_PORT).parse().unwrap();
+    let config = GameConfig::get();
+    let server_addr = format!("{}:{}", config.server_addr, config.server_port).parse().unwrap();
     let current_time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();

@@ -5,8 +5,6 @@ use serde::{Deserialize, Serialize};
 
 /// Costanti di rete
 pub const PROTOCOL_ID: u64 = 7;
-pub const SERVER_PORT: u16 = 5000;
-pub const SERVER_ADDR: &str = "127.0.0.1";
 
 /// Input del giocatore (inviato dal client al server)
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, Default)]

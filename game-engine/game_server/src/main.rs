@@ -5,8 +5,9 @@ use bevy::app::ScheduleRunnerPlugin;
 // Importa direttamente gli elementi necessari dal crate game_shared modularizzato
 use game_shared::{
     hello_shared,
+    GameConfig,
     Player, PlayerController, PlayerPhysics,
-    PROTOCOL_ID, SERVER_PORT, SERVER_ADDR,
+    PROTOCOL_ID,
     NetworkMessage,
     PhysicsBody, BoxCollider,
     PLAYER_HEIGHT, // Per la collisione con il pavimento
@@ -57,7 +58,8 @@ fn main() {
 }
 
 fn setup_network(mut commands: Commands) {
-    let server_addr = format!("{}:{}", SERVER_ADDR, SERVER_PORT).parse().unwrap();
+    let config = GameConfig::get();
+    let server_addr = format!("{}:{}", config.server_addr, config.server_port).parse().unwrap();
     let current_time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
