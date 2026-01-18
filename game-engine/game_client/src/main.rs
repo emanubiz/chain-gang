@@ -259,84 +259,147 @@ fn apply_local_prediction(
 }
 
 /// Spawna un personaggio voxel umano (stile Minecraft)
+/// Spawna un personaggio voxel umano (stile Minecraft)
 fn spawn_voxel_player(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<StandardMaterial>>,
     position: Vec3,
-    color: Color,
+    base_color: Color,
 ) -> Entity {
-    // Materiale del personaggio
-    let material = materials.add(color);
-    
-    // Parent entity (punto di controllo centrale)
-    let player_entity = commands.spawn((
-        PlayerPhysics::default(),
+    use game_shared::*;
+
+    // Helper per scurire un colore (~12% più scuro)
+    let darken = |c: Color| -> Color {
+        let srgba = Srgba::from(c);
+        Color::Srgba(Srgba {
+            red: srgba.red * 0.88,
+            green: srgba.green * 0.88,
+            blue: srgba.blue * 0.88,
+            alpha: srgba.alpha,
+        })
+    };
+
+    // Materiali
+    let skin_mat  = materials.add(Color::srgb(0.96, 0.78, 0.69));
+    let shirt_mat = materials.add(darken(base_color));
+    let pants_mat = materials.add(Color::srgb(0.22, 0.22, 0.55));
+    let shoe_mat  = materials.add(Color::srgb(0.15, 0.12, 0.10));
+    let eye_mat   = materials.add(Color::srgb(0.05, 0.05, 0.08));
+    let mouth_mat = materials.add(Color::srgb(0.78, 0.22, 0.25));
+    let hair_mat  = materials.add(Color::srgb(0.28, 0.18, 0.08));
+
+    // Parent entity
+    let parent = commands.spawn((
         SpatialBundle {
             transform: Transform::from_translation(position),
             ..default()
         },
+        PlayerPhysics::default(),
     )).id();
-    
-    // Testa (cubo 0.4x0.4x0.4)
+
+    // TESTA
     let head = commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(0.4, 0.4, 0.4)),
-        material: material.clone(),
-        transform: Transform::from_xyz(0.0, 0.7, 0.0), // Sopra il corpo
+        mesh: meshes.add(Cuboid::new(HEAD_SIZE, HEAD_SIZE, HEAD_SIZE)),
+        material: skin_mat.clone(),
+        transform: Transform::from_xyz(0.0, HEAD_Y_OFFSET, 0.0),
         ..default()
     }).id();
-    
-    // Corpo (0.5 wide, 0.7 tall, 0.3 deep)
+
+    // Occhi
+    let eye_size = VOXEL_SCALE * 1.4;
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(eye_size, eye_size, VOXEL_SCALE * 0.6)),
+        material: eye_mat.clone(),
+        transform: Transform::from_xyz(-0.11, 0.09, HEAD_SIZE/2.0 + 0.01),
+        ..default()
+    }).set_parent(head);
+
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(eye_size, eye_size, VOXEL_SCALE * 0.6)),
+        material: eye_mat,
+        transform: Transform::from_xyz(0.11, 0.09, HEAD_SIZE/2.0 + 0.01),
+        ..default()
+    }).set_parent(head);
+
+    // Bocca
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(0.18, 0.05, 0.04)),
+        material: mouth_mat,
+        transform: Transform::from_xyz(0.0, -0.08, HEAD_SIZE/2.0 + 0.01),
+        ..default()
+    }).set_parent(head);
+
+    // Capelli
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(HEAD_SIZE * 1.05, 0.22, HEAD_SIZE * 1.05)),
+        material: hair_mat,
+        transform: Transform::from_xyz(0.0, HEAD_SIZE/2.0 + 0.09, 0.0),
+        ..default()
+    }).set_parent(head);
+
+    // CORPO
     let body = commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(0.5, 0.7, 0.3)),
-        material: material.clone(),
-        transform: Transform::from_xyz(0.0, 0.2, 0.0),
+        mesh: meshes.add(Cuboid::new(BODY_WIDTH, BODY_HEIGHT, BODY_DEPTH)),
+        material: shirt_mat.clone(),          // ← CLONE
+        transform: Transform::from_xyz(0.0, BODY_Y_OFFSET, 0.0),
         ..default()
     }).id();
-    
-    // Braccio sinistro
-    let left_arm = commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(0.2, 0.6, 0.2)),
-        material: material.clone(),
-        transform: Transform::from_xyz(-0.4, 0.2, 0.0),
+
+    // BRACCIA
+    let arm_offset_x = BODY_WIDTH / 2.0 + ARM_WIDTH / 2.0;
+
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(ARM_WIDTH, ARM_HEIGHT, ARM_DEPTH)),
+        material: shirt_mat.clone(),          // ← CLONE
+        transform: Transform::from_xyz(-arm_offset_x, ARM_Y_OFFSET, 0.0),
         ..default()
-    }).id();
-    
-    // Braccio destro
-    let right_arm = commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(0.2, 0.6, 0.2)),
-        material: material.clone(),
-        transform: Transform::from_xyz(0.4, 0.2, 0.0),
+    }).set_parent(body);
+
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(ARM_WIDTH, ARM_HEIGHT, ARM_DEPTH)),
+        material: shirt_mat.clone(),          // ← CLONE
+        transform: Transform::from_xyz(arm_offset_x, ARM_Y_OFFSET, 0.0),
         ..default()
-    }).id();
-    
-    // Gamba sinistra
-    let left_leg = commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(0.2, 0.6, 0.2)),
-        material: material.clone(),
-        transform: Transform::from_xyz(-0.15, -0.5, 0.0),
+    }).set_parent(body);
+
+    // GAMBE
+    let leg_offset_x = BODY_WIDTH * 0.25;
+
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(LEG_WIDTH, LEG_HEIGHT, LEG_DEPTH)),
+        material: pants_mat.clone(),
+        transform: Transform::from_xyz(-leg_offset_x, LEG_Y_OFFSET, 0.0),
         ..default()
-    }).id();
-    
-    // Gamba destra
-    let right_leg = commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(0.2, 0.6, 0.2)),
-        material: material.clone(),
-        transform: Transform::from_xyz(0.15, -0.5, 0.0),
+    }).set_parent(body);
+
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(LEG_WIDTH, LEG_HEIGHT, LEG_DEPTH)),
+        material: pants_mat,
+        transform: Transform::from_xyz(leg_offset_x, LEG_Y_OFFSET, 0.0),
         ..default()
-    }).id();
-    
-    // Attacca tutte le parti al parent
-    commands.entity(player_entity).push_children(&[
-        head,
-        body,
-        left_arm,
-        right_arm,
-        left_leg,
-        right_leg,
-    ]);
-    
-    player_entity
+    }).set_parent(body);
+
+    // Scarpe
+    let shoe_height = 0.08;
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(LEG_WIDTH * 1.1, shoe_height, LEG_DEPTH * 1.1)),
+        material: shoe_mat.clone(),
+        transform: Transform::from_xyz(-leg_offset_x, shoe_height/2.0, 0.0),
+        ..default()
+    }).set_parent(body);
+
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(LEG_WIDTH * 1.1, shoe_height, LEG_DEPTH * 1.1)),
+        material: shoe_mat,
+        transform: Transform::from_xyz(leg_offset_x, shoe_height/2.0, 0.0),
+        ..default()
+    }).set_parent(body);
+
+    // Colleghiamo testa e corpo al parent
+    commands.entity(parent).push_children(&[head, body]);
+
+    parent
 }
 
 fn receive_network_messages(

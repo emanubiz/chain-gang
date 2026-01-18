@@ -99,8 +99,28 @@ pub const SERVER_ADDR: &str = "127.0.0.1";
 pub const PLAYER_RADIUS: f32 = 0.5;
 pub const PLAYER_HEIGHT: f32 = 1.8;
 
-/// Funzione condivisa per applicare il movimento del giocatore
-/// Usata sia dal client (per prediction) che dal server (autoritativo)
+// ── NUOVE COSTANTI VOXEL PERSONAGGIO ───────────────────────────────────────
+pub const VOXEL_SCALE: f32 = 0.18;
+
+pub const HEAD_SIZE: f32 = 0.42;
+pub const HEAD_Y_OFFSET: f32 = 1.38;
+
+pub const BODY_WIDTH: f32 = 0.38;
+pub const BODY_DEPTH: f32 = 0.28;
+pub const BODY_HEIGHT: f32 = 0.68;
+pub const BODY_Y_OFFSET: f32 = 0.70;
+
+pub const ARM_WIDTH: f32 = 0.16;
+pub const ARM_DEPTH: f32 = 0.16;
+pub const ARM_HEIGHT: f32 = 0.62;
+pub const ARM_Y_OFFSET: f32 = 0.70;
+
+pub const LEG_WIDTH: f32 = 0.18;
+pub const LEG_DEPTH: f32 = 0.18;
+pub const LEG_HEIGHT: f32 = 0.70;
+pub const LEG_Y_OFFSET: f32 = 0.0;
+
+// Funzione condivisa per applicare il movimento del giocatore
 pub fn apply_player_movement(
     input: &PlayerInput,
     transform: &mut Transform,
