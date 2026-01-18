@@ -123,6 +123,7 @@ fn handle_server_events(
     mut server: ResMut<RenetServer>,
     mut server_events: EventReader<ServerEvent>,
     mut player_registry: ResMut<PlayerRegistry>,
+    existing_players_query: Query<(Entity, &Transform, &Player)>,
 ) {
     for event in server_events.read() {
         match event {
@@ -143,7 +144,30 @@ fn handle_server_events(
                 
                 player_registry.map.insert(client_id_u64, player_entity);
                 
-                // Notifica tutti i client del nuovo giocatore
+                // 1. Invia al nuovo client la lista dei giocatori già presenti
+                for (entity, transform, player) in existing_players_query.iter() {
+                    let msg = NetworkMessage::PlayerConnected {
+                        entity_id: entity.index() as u64,
+                        client_id: player.id,
+                    };
+                    if let Ok(data) = bincode::serialize(&msg) {
+                        server.send_message(*client_id, 0, data.clone());
+                    }
+                    
+                    // Invia anche la posizione corrente
+                    let state_msg = NetworkMessage::PlayerStateUpdate(PlayerState {
+                        entity_id: entity.index() as u64,
+                        position: transform.translation,
+                        velocity: Vec3::ZERO,
+                        rotation: transform.rotation,
+                        sequence_number: 0,
+                    });
+                    if let Ok(data) = bincode::serialize(&state_msg) {
+                        server.send_message(*client_id, 0, data);
+                    }
+                }
+                
+                // 2. Notifica TUTTI i client del nuovo giocatore
                 let msg = NetworkMessage::PlayerConnected {
                     entity_id: player_entity.index() as u64,
                     client_id: client_id_u64,

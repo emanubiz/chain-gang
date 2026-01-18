@@ -213,7 +213,8 @@ fn receive_network_messages(
     mut input_history: ResMut<InputHistory>,
     local_player: Option<Res<LocalPlayer>>,
     our_client_id: Res<OurClientId>,
-    mut query: Query<(&mut Transform, &mut PlayerPhysics)>,
+    mut local_query: Query<(&mut Transform, &mut PlayerPhysics), With<PlayerController>>,
+    mut remote_query: Query<(&mut Transform, &mut PlayerPhysics), Without<PlayerController>>,
 ) {
     while let Some(message) = client.receive_message(0) {
         if let Ok(msg) = bincode::deserialize::<NetworkMessage>(&message) {
@@ -237,13 +238,16 @@ fn receive_network_messages(
                         commands.insert_resource(LocalPlayer(player_entity));
                         synchronized_entities.map.insert(entity_id, player_entity);
                     } else {
-                        // Giocatore remoto
-                        let remote_entity = commands.spawn(PbrBundle {
-                            mesh: meshes.add(Capsule3d::new(PLAYER_RADIUS, PLAYER_HEIGHT)),
-                            material: materials.add(Color::srgb(0.8, 0.2, 0.2)), // Rosso per i remoti
-                            transform: Transform::from_xyz(0.0, 2.0, 0.0),
-                            ..default()
-                        }).id();
+                        // Giocatore remoto - aggiungi anche i componenti per ricevere gli update
+                        let remote_entity = commands.spawn((
+                            PlayerPhysics::default(),
+                            PbrBundle {
+                                mesh: meshes.add(Capsule3d::new(PLAYER_RADIUS, PLAYER_HEIGHT)),
+                                material: materials.add(Color::srgb(0.8, 0.2, 0.2)), // Rosso per i remoti
+                                transform: Transform::from_xyz(0.0, 2.0, 0.0),
+                                ..default()
+                            },
+                        )).id();
                         
                         synchronized_entities.map.insert(entity_id, remote_entity);
                     }
@@ -263,9 +267,10 @@ fn receive_network_messages(
                                 // Reconciliation: rimuovi gli input già processati
                                 input_history.remove_until(state.sequence_number);
                                 
-                                // Riapplica gli input rimanenti sopra lo stato del server
-                                if let Ok((mut transform, mut physics)) = query.get_mut(entity) {
+                                // Aggiorna con lo stato del server
+                                if let Ok((mut transform, mut physics)) = local_query.get_mut(entity) {
                                     transform.translation = state.position;
+                                    transform.rotation = state.rotation;
                                     physics.velocity = state.velocity;
                                     
                                     // TODO: Riapplica gli input pendenti
@@ -276,19 +281,21 @@ fn receive_network_messages(
                         }
                     }
                     
-                    // Giocatori remoti: interpola
+                    // Giocatori remoti: aggiorna direttamente
                     if let Some(&entity) = synchronized_entities.map.get(&state.entity_id) {
-                        if let Ok((mut transform, _)) = query.get_mut(entity) {
+                        if let Ok((mut transform, mut physics)) = remote_query.get_mut(entity) {
                             transform.translation = state.position;
                             transform.rotation = state.rotation;
+                            physics.velocity = state.velocity;
                         }
                     }
                 }
                 
                 NetworkMessage::RigidBodyUpdate { entity_id, position, rotation } => {
-                    // Cubo che cade
-                    if let Some(entity) = synchronized_entities.map.get(&entity_id) {
-                        if let Ok((mut transform, _)) = query.get_mut(*entity) {
+                    // Cubo che cade - usa una query semplice senza filtri
+                    if let Some(&entity) = synchronized_entities.map.get(&entity_id) {
+                        // Prova prima con remote_query (il cubo non ha PlayerController)
+                        if let Ok((mut transform, _)) = remote_query.get_mut(entity) {
                             transform.translation = position;
                             transform.rotation = rotation;
                         }
