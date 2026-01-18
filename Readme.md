@@ -67,12 +67,13 @@ chain-gang/
 | 1.3 | Player Movement & Prediction | ✅ Completato |
 | 1.4 | Player Experience Refinement | 🚧 In Corso |
 | 1.5 | Voxel & Shooting | 📋 Pianificato |
+| 1.6 | Game Modes & Lobby | 📋 Pianificato |
 
-**Prossimi Step:**
-- 🎯 Rotazione camera (mouse look)
-- 🎯 Camera che segue il giocatore
-- 🎯 Interpolazione giocatori remoti
-- 🎯 Reconciliation completa
+**Step 1.4 - Player Experience Refinement:**
+- 🎯 Mouse look (rotazione camera)
+- 🎯 Camera FPS che segue il giocatore
+- 🎯 Interpolazione giocatori remoti (movimento fluido)
+- 🎯 Reconciliation completa (riapplica input pendenti)
 
 ## 🚀 Quick Start
 

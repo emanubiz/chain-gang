@@ -94,25 +94,27 @@ chain-gang/
 *   **STATO: COMPLETATO** ✅
 
 ### 🚧 Step 1.4 - Player Experience Refinement
-*   **Obiettivo:** Migliorare la sensazione di gioco e la fluidità del movimento
+*   **Obiettivo:** Migliorare la sensazione di gioco e la fluidità
     *   **Rotazione della camera** (mouse look) - Controllo First Person
-    *   **Camera che segue il giocatore** - Vista in terza persona o FPS
+    *   **Camera che segue il giocatore** - Vista FPS
     *   **Interpolazione** dei giocatori remoti per movimento fluido (no teleport)
     *   **Riapplicazione degli input pendenti** dopo reconciliation per prediction perfetta
-*   **STATO: PROSSIMO STEP** 🎯
+*   **STATO: IN CORSO** 🎯
 
-### 📋 Step 1.5 - Voxel & Shooting (Pianificato)
+### 📋 Step 1.5 - Voxel & Shooting
 *   Generazione di un ambiente voxel di base
 *   Logica dello sparo (Raycasting)
 *   Rimozione del voxel colpito sincronizzata tra tutti i client
 *   Hit detection sui giocatori
 *   Health system e respawn
+*   **STATO: PIANIFICATO**
 
-### 📋 Step 1.6 - Game Modes (Pianificato)
+### 📋 Step 1.6 - Game Modes
 *   Sistema di lobby per 1v1, 2v2, 3v3, 4v4
 *   Matchmaking per modalità pratica
 *   Timer di match e win conditions
 *   Scoreboard e statistiche partita
+*   **STATO: PIANIFICATO**
 
 ## TECNOLOGIE UTILIZZATE
 
