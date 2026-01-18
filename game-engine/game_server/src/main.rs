@@ -2,7 +2,15 @@
 
 use bevy::prelude::*;
 use bevy::app::ScheduleRunnerPlugin;
-use game_shared::*;
+// Importa direttamente gli elementi necessari dal crate game_shared modularizzato
+use game_shared::{
+    hello_shared,
+    Player, PlayerController, PlayerPhysics,
+    PROTOCOL_ID, SERVER_PORT, SERVER_ADDR,
+    NetworkMessage,
+    PhysicsBody, BoxCollider,
+    PLAYER_HEIGHT, // Per la collisione con il pavimento
+};
 use bevy_renet::renet::{ConnectionConfig, RenetServer, ServerEvent};
 use bevy_renet::renet::transport::{NetcodeServerTransport, ServerAuthentication, ServerConfig};
 use bevy_renet::RenetServerPlugin;
@@ -22,19 +30,6 @@ struct PlayerRegistry {
 /// Risorsa per il cubo che cade (separato dai giocatori)
 #[derive(Resource)]
 struct FallingCube(Entity);
-
-/// Componente per la fisica generale (usato dal cubo)
-#[derive(Component)]
-struct PhysicsBody {
-    velocity: Vec3,
-    gravity: f32,
-    bounciness: f32,
-}
-
-#[derive(Component)]
-struct BoxCollider {
-    half_extents: Vec3,
-}
 
 fn main() {
     println!("🔥 SERVER: Avvio in corso...");
@@ -155,7 +150,7 @@ fn handle_server_events(
                     }
                     
                     // Invia anche la posizione corrente
-                    let state_msg = NetworkMessage::PlayerStateUpdate(PlayerState {
+                    let state_msg = NetworkMessage::PlayerStateUpdate(game_shared::network_messages::PlayerState {
                         entity_id: entity.index() as u64,
                         position: transform.translation,
                         velocity: Vec3::ZERO,
@@ -222,7 +217,7 @@ fn handle_player_inputs(
                         controller.grounded = transform.translation.y <= PLAYER_HEIGHT / 2.0 + 0.01;
                         
                         // Applica il movimento (funzione condivisa con il client)
-                        apply_player_movement(
+                        game_shared::apply_player_movement( // Usa il percorso completo per la funzione
                             &input,
                             &mut transform,
                             &mut physics,
@@ -282,7 +277,7 @@ fn sync_to_clients(
 ) {
     // Invia lo stato di ogni giocatore
     for (entity, transform, physics, _player) in player_query.iter() {
-        let state = PlayerState {
+        let state = game_shared::network_messages::PlayerState { // Specifica il percorso completo
             entity_id: entity.index() as u64,
             position: transform.translation,
             velocity: physics.velocity,
