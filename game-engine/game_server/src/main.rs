@@ -1,23 +1,29 @@
-// game_server/src/main.rs - Step 1.2: FIXED - Transport Send/Receive
+// game_server/src/main.rs - Step 1.3: Player Movement (Server)
 
 use bevy::prelude::*;
 use bevy::app::ScheduleRunnerPlugin;
-use game_shared::{hello_shared, PROTOCOL_ID, SERVER_PORT, SERVER_ADDR, PhysicsMessage};
+use game_shared::*;
 use bevy_renet::renet::{ConnectionConfig, RenetServer, ServerEvent};
 use bevy_renet::renet::transport::{NetcodeServerTransport, ServerAuthentication, ServerConfig};
 use bevy_renet::RenetServerPlugin;
+use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::time::{Duration, SystemTime};
 
-// Wrapper Resource per NetcodeServerTransport
 #[derive(Resource)]
 struct Transport(NetcodeServerTransport);
 
-// Risorsa per tracciare l'entità del cubo sincronizzato
-#[derive(Resource)]
-struct SynchronizedCube(Entity);
+/// Mappa Client ID -> Player Entity
+#[derive(Resource, Default)]
+struct PlayerRegistry {
+    map: HashMap<u64, Entity>,
+}
 
-// Componente per la fisica manuale
+/// Risorsa per il cubo che cade (separato dai giocatori)
+#[derive(Resource)]
+struct FallingCube(Entity);
+
+/// Componente per la fisica generale (usato dal cubo)
 #[derive(Component)]
 struct PhysicsBody {
     velocity: Vec3,
@@ -25,7 +31,6 @@ struct PhysicsBody {
     bounciness: f32,
 }
 
-// Componente per i collider (AABB semplice)
 #[derive(Component)]
 struct BoxCollider {
     half_extents: Vec3,
@@ -38,16 +43,19 @@ fn main() {
     App::new()
         .add_plugins(
             MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(
-                Duration::from_secs_f64(1.0 / 60.0) // 60 tick al secondo
+                Duration::from_secs_f64(1.0 / 60.0)
             ))
         )
         .add_plugins(RenetServerPlugin)
-        .add_systems(Startup, (setup_network, setup_physics).chain())
+        .insert_resource(PlayerRegistry::default())
+        .add_systems(Startup, (setup_network, setup_level).chain())
         .add_systems(Update, (
             handle_server_events,
-            apply_physics,
-            sync_physics_to_clients,
-            update_transport,  // IMPORTANTE: Questo deve essere DOPO sync_physics
+            handle_player_inputs,
+            apply_player_physics,
+            apply_cube_physics,
+            sync_to_clients,
+            update_transport,
             server_tick,
         ).chain())
         .run();
@@ -59,16 +67,13 @@ fn setup_network(mut commands: Commands) {
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
 
-    // Crea socket UDP
     let socket = UdpSocket::bind(server_addr)
         .expect("Impossibile bindare il socket UDP del server");
 
     println!("✅ SERVER: Socket UDP bindato su {}", server_addr);
 
-    // Crea RenetServer
     let server = RenetServer::new(ConnectionConfig::default());
 
-    // Configurazione transport
     let server_config = ServerConfig {
         current_time,
         max_clients: 64,
@@ -77,7 +82,6 @@ fn setup_network(mut commands: Commands) {
         authentication: ServerAuthentication::Unsecure,
     };
 
-    // Crea transport
     let transport = NetcodeServerTransport::new(server_config, socket)
         .expect("Impossibile creare NetcodeServerTransport");
 
@@ -85,19 +89,18 @@ fn setup_network(mut commands: Commands) {
     commands.insert_resource(Transport(transport));
 }
 
-fn setup_physics(mut commands: Commands) {
-    println!("🔧 SERVER: Setup fisica manuale in corso...");
+fn setup_level(mut commands: Commands) {
+    println!("🔧 SERVER: Setup livello in corso...");
     
-    // Spawna il pavimento (collider statico a y = 0)
-    let floor = commands.spawn((
+    // Pavimento (collider statico)
+    commands.spawn((
         Transform::from_xyz(0.0, 0.0, 0.0),
         BoxCollider {
             half_extents: Vec3::new(10.0, 0.5, 10.0),
         },
-    )).id();
-    println!("✅ SERVER: Pavimento creato: {:?}", floor);
+    ));
 
-    // Spawna il cubo che cade
+    // Cubo che cade (fisica separata dai giocatori)
     let cube_entity = commands.spawn((
         Transform::from_xyz(0.0, 5.0, 0.0),
         PhysicsBody {
@@ -110,25 +113,130 @@ fn setup_physics(mut commands: Commands) {
         },
     )).id();
 
-    commands.insert_resource(SynchronizedCube(cube_entity));
+    commands.insert_resource(FallingCube(cube_entity));
     
-    println!("✅ SERVER: Cubo fisico spawnato con ID: {:?}", cube_entity);
+    println!("✅ SERVER: Livello pronto");
 }
 
-fn apply_physics(
+fn handle_server_events(
+    mut commands: Commands,
+    mut server: ResMut<RenetServer>,
+    mut server_events: EventReader<ServerEvent>,
+    mut player_registry: ResMut<PlayerRegistry>,
+) {
+    for event in server_events.read() {
+        match event {
+            ServerEvent::ClientConnected { client_id } => {
+                let client_id_u64 = client_id.raw();
+                println!("✅ SERVER: Client {} connesso!", client_id_u64);
+                
+                // Spawna l'entità del giocatore
+                let player_entity = commands.spawn((
+                    Transform::from_xyz(0.0, 2.0, 0.0),
+                    PlayerController::default(),
+                    PlayerPhysics::default(),
+                    Player {
+                        id: client_id_u64,
+                        username: format!("Player{}", client_id_u64),
+                    },
+                )).id();
+                
+                player_registry.map.insert(client_id_u64, player_entity);
+                
+                // Notifica tutti i client del nuovo giocatore
+                let msg = NetworkMessage::PlayerConnected {
+                    entity_id: player_entity.index() as u64,
+                    client_id: client_id_u64,
+                };
+                
+                if let Ok(data) = bincode::serialize(&msg) {
+                    server.broadcast_message(0, data);
+                }
+                
+                println!("👤 SERVER: Spawned player entity {:?} for client {}", player_entity, client_id_u64);
+            }
+            
+            ServerEvent::ClientDisconnected { client_id, reason } => {
+                let client_id_u64 = client_id.raw();
+                println!("❌ SERVER: Client {} disconnesso: {:?}", client_id_u64, reason);
+                
+                if let Some(player_entity) = player_registry.map.remove(&client_id_u64) {
+                    commands.entity(player_entity).despawn();
+                    
+                    // Notifica tutti i client
+                    let msg = NetworkMessage::PlayerDisconnected {
+                        entity_id: player_entity.index() as u64,
+                    };
+                    
+                    if let Ok(data) = bincode::serialize(&msg) {
+                        server.broadcast_message(0, data);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn handle_player_inputs(
+    mut server: ResMut<RenetServer>,
+    player_registry: Res<PlayerRegistry>,
+    mut query: Query<(&mut Transform, &mut PlayerPhysics, &mut PlayerController)>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_seconds();
+    
+    // Per ogni client connesso, processa gli input
+    for client_id in server.clients_id() {
+        let client_id_u64 = client_id.raw();
+        
+        while let Some(message) = server.receive_message(client_id, 0) {
+            if let Ok(NetworkMessage::PlayerInput(input)) = bincode::deserialize::<NetworkMessage>(&message) {
+                // Trova l'entità del giocatore
+                if let Some(&player_entity) = player_registry.map.get(&client_id_u64) {
+                    if let Ok((mut transform, mut physics, mut controller)) = query.get_mut(player_entity) {
+                        // Controlla se il giocatore è a terra
+                        controller.grounded = transform.translation.y <= PLAYER_HEIGHT / 2.0 + 0.01;
+                        
+                        // Applica il movimento (funzione condivisa con il client)
+                        apply_player_movement(
+                            &input,
+                            &mut transform,
+                            &mut physics,
+                            &controller,
+                            dt
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn apply_player_physics(
+    mut query: Query<(&mut Transform, &mut PlayerPhysics, &mut PlayerController)>,
+) {
+    for (mut transform, mut physics, mut controller) in query.iter_mut() {
+        // Collisione con il pavimento
+        if transform.translation.y <= PLAYER_HEIGHT / 2.0 {
+            transform.translation.y = PLAYER_HEIGHT / 2.0;
+            physics.velocity.y = 0.0;
+            controller.grounded = true;
+        } else {
+            controller.grounded = false;
+        }
+    }
+}
+
+fn apply_cube_physics(
     mut query: Query<(&mut Transform, &mut PhysicsBody, &BoxCollider)>,
     time: Res<Time>,
 ) {
     let dt = time.delta_seconds();
     
     for (mut transform, mut body, collider) in query.iter_mut() {
-        // Applica gravità
         body.velocity.y += body.gravity * dt;
-        
-        // Applica velocità
         transform.translation += body.velocity * dt;
         
-        // Collisione con il pavimento
         let ground_level = 0.5 + collider.half_extents.y;
         
         if transform.translation.y <= ground_level {
@@ -142,71 +250,56 @@ fn apply_physics(
     }
 }
 
+fn sync_to_clients(
+    mut server: ResMut<RenetServer>,
+    player_query: Query<(Entity, &Transform, &PlayerPhysics, &Player)>,
+    cube_query: Query<(Entity, &Transform), With<PhysicsBody>>,
+    falling_cube: Res<FallingCube>,
+) {
+    // Invia lo stato di ogni giocatore
+    for (entity, transform, physics, _player) in player_query.iter() {
+        let state = PlayerState {
+            entity_id: entity.index() as u64,
+            position: transform.translation,
+            velocity: physics.velocity,
+            rotation: transform.rotation,
+            sequence_number: 0, // TODO: tracciare sequence number
+        };
+        
+        let msg = NetworkMessage::PlayerStateUpdate(state);
+        
+        if let Ok(data) = bincode::serialize(&msg) {
+            server.broadcast_message(0, data);
+        }
+    }
+    
+    // Invia lo stato del cubo che cade
+    if let Ok((entity, transform)) = cube_query.get(falling_cube.0) {
+        let msg = NetworkMessage::RigidBodyUpdate {
+            entity_id: entity.index() as u64,
+            position: transform.translation,
+            rotation: transform.rotation,
+        };
+        
+        if let Ok(data) = bincode::serialize(&msg) {
+            server.broadcast_message(0, data);
+        }
+    }
+}
+
 fn update_transport(
     mut server: ResMut<RenetServer>,
     mut transport: ResMut<Transport>,
     time: Res<Time>,
 ) {
     let delta = time.delta();
-    
-    // 1. Aggiorna la logica di renet
     server.update(delta);
     
-    // 2. Aggiorna il transport (gestisce connessioni/disconnessioni)
     if let Err(e) = transport.0.update(delta, &mut *server) {
         eprintln!("❌ Errore transport update: {:?}", e);
     }
     
-    // 3. 🔥 QUESTO È IL PEZZO MANCANTE! 🔥
-    // Invia effettivamente i pacchetti sul socket UDP
     transport.0.send_packets(&mut *server);
-}
-
-fn sync_physics_to_clients(
-    mut server: ResMut<RenetServer>,
-    synced_cube: Res<SynchronizedCube>,
-    query: Query<(&Transform, &PhysicsBody)>,
-    time: Res<Time>,
-) {
-    // Ottieni la transform del cubo
-    if let Ok((transform, body)) = query.get(synced_cube.0) {
-        let message = PhysicsMessage::RigidBodyUpdate {
-            entity_id: synced_cube.0.index() as u64,
-            position: transform.translation,
-            rotation: transform.rotation,
-        };
-
-        // Debug: stampa ogni 2 secondi
-        if (time.elapsed_seconds() / 2.0).floor() != ((time.elapsed_seconds() - time.delta_seconds()) / 2.0).floor() {
-            let client_count = server.clients_id().len();
-            println!("📦 SERVER: Cubo a pos={:.2?}, vel={:.2?}", transform.translation, body.velocity);
-            if client_count > 0 {
-                println!("🔄 SERVER: {} client(i) connesso/i", client_count);
-            } else {
-                println!("⚠️  SERVER: Nessun client connesso");
-            }
-        }
-
-        // Serializza e invia a tutti i client connessi
-        if let Ok(message_data) = bincode::serialize(&message) {
-            for client_id in server.clients_id() {
-                server.send_message(client_id, 0, message_data.clone());
-            }
-        }
-    }
-}
-
-fn handle_server_events(mut server_events: EventReader<ServerEvent>) {
-    for event in server_events.read() {
-        match event {
-            ServerEvent::ClientConnected { client_id } => {
-                println!("✅ SERVER: Client {} connesso!", client_id);
-            }
-            ServerEvent::ClientDisconnected { client_id, reason } => {
-                println!("❌ SERVER: Client {} disconnesso: {:?}", client_id, reason);
-            }
-        }
-    }
 }
 
 fn server_tick(time: Res<Time>) {

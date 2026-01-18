@@ -1,22 +1,65 @@
-// game_client/src/main.rs - Step 1.2: FIXED - Transport Send/Receive
+// game_client/src/main.rs - Step 1.3: Player Movement (Client-Side Prediction)
 
 use bevy::prelude::*;
-use game_shared::{hello_shared, PROTOCOL_ID, SERVER_PORT, SERVER_ADDR, PhysicsMessage};
+use game_shared::*;
 use bevy_renet::renet::{ConnectionConfig, RenetClient};
 use bevy_renet::renet::transport::{NetcodeClientTransport, ClientAuthentication};
 use bevy_renet::RenetClientPlugin;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::net::UdpSocket;
 use std::time::SystemTime;
 
-// Wrapper Resource per NetcodeClientTransport
 #[derive(Resource)]
 struct Transport(NetcodeClientTransport);
 
-// Mappa delle entità sincronizzate
+/// ID del client corrente
+#[derive(Resource)]
+struct OurClientId(u64);
+
+/// Mappa Entity ID -> Entity (per giocatori remoti e oggetti)
 #[derive(Resource, Default)]
 struct SynchronizedEntities {
     map: HashMap<u64, Entity>,
+}
+
+/// Entità del giocatore locale controllato dal client
+#[derive(Resource)]
+struct LocalPlayer(Entity);
+
+/// Storico degli input inviati (per reconciliation)
+#[derive(Resource, Default)]
+struct InputHistory {
+    inputs: VecDeque<(u32, PlayerInput)>,
+    next_sequence: u32,
+}
+
+impl InputHistory {
+    fn add(&mut self, input: PlayerInput) -> u32 {
+        let seq = self.next_sequence;
+        self.next_sequence += 1;
+        
+        let mut input_with_seq = input;
+        input_with_seq.sequence_number = seq;
+        
+        self.inputs.push_back((seq, input_with_seq));
+        
+        // Mantieni solo gli ultimi 100 input
+        while self.inputs.len() > 100 {
+            self.inputs.pop_front();
+        }
+        
+        seq
+    }
+    
+    fn remove_until(&mut self, sequence_number: u32) {
+        while let Some((seq, _)) = self.inputs.front() {
+            if *seq <= sequence_number {
+                self.inputs.pop_front();
+            } else {
+                break;
+            }
+        }
+    }
 }
 
 fn main() {
@@ -37,10 +80,13 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.15)))
         .add_plugins(RenetClientPlugin)
         .insert_resource(SynchronizedEntities::default())
+        .insert_resource(InputHistory::default())
         .add_systems(Startup, (setup_level, setup_network).chain())
         .add_systems(Update, (
-            update_transport,  // IMPORTANTE: Prima ricevi i pacchetti
-            receive_physics_messages,  // Poi processi i messaggi
+            update_transport,
+            handle_input,
+            apply_local_prediction,
+            receive_network_messages,
             client_tick,
         ).chain())
         .run();
@@ -57,8 +103,9 @@ fn setup_network(mut commands: Commands) {
     let client_socket = UdpSocket::bind("0.0.0.0:0")
         .expect("Impossibile bindare il socket UDP del client");
 
-    println!("✅ CLIENT: Socket UDP bindato su porta locale");
-    println!("🔌 CLIENT: Tentativo di connessione a {}...", server_addr);
+    println!("✅ CLIENT: Socket UDP bindato");
+    println!("🔌 CLIENT: Connessione a {}...", server_addr);
+    println!("🆔 CLIENT: Il nostro ID è {}", client_id);
 
     let client = RenetClient::new(ConnectionConfig::default());
 
@@ -74,6 +121,194 @@ fn setup_network(mut commands: Commands) {
 
     commands.insert_resource(client);
     commands.insert_resource(Transport(transport));
+    commands.insert_resource(OurClientId(client_id));
+}
+
+fn handle_input(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut client: ResMut<RenetClient>,
+    mut input_history: ResMut<InputHistory>,
+    local_player: Option<Res<LocalPlayer>>,
+) {
+    // Aspetta che il giocatore locale sia spawnato
+    if local_player.is_none() || !client.is_connected() {
+        return;
+    }
+    
+    // Leggi input da tastiera
+    let mut move_direction = Vec2::ZERO;
+    
+    if keyboard.pressed(KeyCode::KeyW) {
+        move_direction.y += 1.0;
+    }
+    if keyboard.pressed(KeyCode::KeyS) {
+        move_direction.y -= 1.0;
+    }
+    if keyboard.pressed(KeyCode::KeyA) {
+        move_direction.x -= 1.0;
+    }
+    if keyboard.pressed(KeyCode::KeyD) {
+        move_direction.x += 1.0;
+    }
+    
+    // Normalizza per movimento diagonale consistente
+    if move_direction.length() > 0.0 {
+        move_direction = move_direction.normalize();
+    }
+    
+    let jump = keyboard.pressed(KeyCode::Space);
+    
+    // Crea input
+    let input = PlayerInput {
+        move_direction,
+        jump,
+        sequence_number: 0, // Verrà assegnato da input_history
+    };
+    
+    // Aggiungi all'history e ottieni sequence number
+    let seq = input_history.add(input);
+    
+    // Invia al server
+    let mut input_with_seq = input;
+    input_with_seq.sequence_number = seq;
+    
+    let msg = NetworkMessage::PlayerInput(input_with_seq);
+    if let Ok(data) = bincode::serialize(&msg) {
+        client.send_message(0, data);
+    }
+}
+
+fn apply_local_prediction(
+    mut query: Query<(&mut Transform, &mut PlayerPhysics, &mut PlayerController)>,
+    local_player: Option<Res<LocalPlayer>>,
+    input_history: Res<InputHistory>,
+    time: Res<Time>,
+) {
+    if let Some(local_player) = local_player {
+        if let Ok((mut transform, mut physics, mut controller)) = query.get_mut(local_player.0) {
+            // Applica l'ultimo input ricevuto
+            if let Some((_, input)) = input_history.inputs.back() {
+                let dt = time.delta_seconds();
+                
+                controller.grounded = transform.translation.y <= PLAYER_HEIGHT / 2.0 + 0.01;
+                
+                apply_player_movement(
+                    input,
+                    &mut transform,
+                    &mut physics,
+                    &controller,
+                    dt
+                );
+            }
+        }
+    }
+}
+
+fn receive_network_messages(
+    mut commands: Commands,
+    mut client: ResMut<RenetClient>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut synchronized_entities: ResMut<SynchronizedEntities>,
+    mut input_history: ResMut<InputHistory>,
+    local_player: Option<Res<LocalPlayer>>,
+    our_client_id: Res<OurClientId>,
+    mut query: Query<(&mut Transform, &mut PlayerPhysics)>,
+) {
+    while let Some(message) = client.receive_message(0) {
+        if let Ok(msg) = bincode::deserialize::<NetworkMessage>(&message) {
+            match msg {
+                NetworkMessage::PlayerConnected { entity_id, client_id } => {
+                    println!("👤 CLIENT: Player {} connesso (entity: {})", client_id, entity_id);
+                    
+                    // Se è il giocatore locale, salvalo
+                    if our_client_id.0 == client_id {
+                        let player_entity = commands.spawn((
+                            PlayerController::default(),
+                            PlayerPhysics::default(),
+                            PbrBundle {
+                                mesh: meshes.add(Capsule3d::new(PLAYER_RADIUS, PLAYER_HEIGHT)),
+                                material: materials.add(Color::srgb(0.2, 0.8, 0.2)), // Verde per il locale
+                                transform: Transform::from_xyz(0.0, 2.0, 0.0),
+                                ..default()
+                            },
+                        )).id();
+                        
+                        commands.insert_resource(LocalPlayer(player_entity));
+                        synchronized_entities.map.insert(entity_id, player_entity);
+                    } else {
+                        // Giocatore remoto
+                        let remote_entity = commands.spawn(PbrBundle {
+                            mesh: meshes.add(Capsule3d::new(PLAYER_RADIUS, PLAYER_HEIGHT)),
+                            material: materials.add(Color::srgb(0.8, 0.2, 0.2)), // Rosso per i remoti
+                            transform: Transform::from_xyz(0.0, 2.0, 0.0),
+                            ..default()
+                        }).id();
+                        
+                        synchronized_entities.map.insert(entity_id, remote_entity);
+                    }
+                }
+                
+                NetworkMessage::PlayerDisconnected { entity_id } => {
+                    if let Some(entity) = synchronized_entities.map.remove(&entity_id) {
+                        commands.entity(entity).despawn();
+                    }
+                }
+                
+                NetworkMessage::PlayerStateUpdate(state) => {
+                    // Se è il giocatore locale, fai reconciliation
+                    if let Some(local_player) = &local_player {
+                        if let Some(&entity) = synchronized_entities.map.get(&state.entity_id) {
+                            if entity == local_player.0 {
+                                // Reconciliation: rimuovi gli input già processati
+                                input_history.remove_until(state.sequence_number);
+                                
+                                // Riapplica gli input rimanenti sopra lo stato del server
+                                if let Ok((mut transform, mut physics)) = query.get_mut(entity) {
+                                    transform.translation = state.position;
+                                    physics.velocity = state.velocity;
+                                    
+                                    // TODO: Riapplica gli input pendenti
+                                }
+                                
+                                continue;
+                            }
+                        }
+                    }
+                    
+                    // Giocatori remoti: interpola
+                    if let Some(&entity) = synchronized_entities.map.get(&state.entity_id) {
+                        if let Ok((mut transform, _)) = query.get_mut(entity) {
+                            transform.translation = state.position;
+                            transform.rotation = state.rotation;
+                        }
+                    }
+                }
+                
+                NetworkMessage::RigidBodyUpdate { entity_id, position, rotation } => {
+                    // Cubo che cade
+                    if let Some(entity) = synchronized_entities.map.get(&entity_id) {
+                        if let Ok((mut transform, _)) = query.get_mut(*entity) {
+                            transform.translation = position;
+                            transform.rotation = rotation;
+                        }
+                    } else {
+                        // Spawna il cubo
+                        let cube_entity = commands.spawn(PbrBundle {
+                            mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
+                            material: materials.add(Color::srgb(0.8, 0.2, 0.2)),
+                            transform: Transform::from_translation(position).with_rotation(rotation),
+                            ..default()
+                        }).id();
+                        
+                        synchronized_entities.map.insert(entity_id, cube_entity);
+                    }
+                }
+                
+                _ => {}
+            }
+        }
+    }
 }
 
 fn update_transport(
@@ -82,83 +317,22 @@ fn update_transport(
     time: Res<Time>,
 ) {
     let delta = time.delta();
-    
-    // 1. Aggiorna la logica di renet
     client.update(delta);
     
-    // 2. 🔥 Update transport - questo GIÀ riceve i pacchetti internamente
-    if let Err(_) = transport.0.update(delta, &mut *client) {
-        // Ignoriamo gli errori durante la connessione iniziale
-    }
-    
-    // 3. 🔥 INVIA i pacchetti (ACKs, ecc.)
+    let _ = transport.0.update(delta, &mut *client);
     let _ = transport.0.send_packets(&mut *client);
 }
 
-fn receive_physics_messages(
-    mut commands: Commands,
-    mut client: ResMut<RenetClient>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-    mut synchronized_entities: ResMut<SynchronizedEntities>,
-    mut query: Query<&mut Transform>,
-    time: Res<Time>,
-) {
-    // Verifica stato connessione
-    let is_connected = client.is_connected();
-    
-    let mut message_count = 0;
-    
-    // Ricevi tutti i messaggi dal canale 0 (fisica)
-    while let Some(message) = client.receive_message(0) {
-        message_count += 1;
-        
-        if let Ok(physics_msg) = bincode::deserialize::<PhysicsMessage>(&message) {
-            match physics_msg {
-                PhysicsMessage::RigidBodyUpdate { entity_id, position, rotation } => {
-                    // Se l'entità esiste già, aggiorna la sua posizione
-                    if let Some(local_entity) = synchronized_entities.map.get(&entity_id) {
-                        if let Ok(mut transform) = query.get_mut(*local_entity) {
-                            transform.translation = position;
-                            transform.rotation = rotation;
-                        }
-                    } else {
-                        // Spawna una nuova entità visuale
-                        println!("📦 CLIENT: Spawn cubo (ID: {}) a {:?}", entity_id, position);
-                        
-                        let local_entity = commands.spawn(PbrBundle {
-                            mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
-                            material: materials.add(Color::srgb(0.8, 0.2, 0.2)),
-                            transform: Transform::from_translation(position)
-                                .with_rotation(rotation),
-                            ..default()
-                        }).id();
-                        
-                        synchronized_entities.map.insert(entity_id, local_entity);
-                    }
-                }
-            }
-        }
-    }
-    
-    // Debug: stampa ogni 2 secondi
-    if (time.elapsed_seconds() / 2.0).floor() != ((time.elapsed_seconds() - time.delta_seconds()) / 2.0).floor() {
-        if !is_connected {
-            println!("⏳ CLIENT: In attesa di connessione al server...");
-        } else if message_count == 0 {
-            println!("⚠️ CLIENT: Connesso ma 0 messaggi ricevuti");
-        } else {
-            println!("✅ CLIENT: Ricevuti {} messaggi", message_count);
-        }
-    }
-}
-
-fn client_tick(time: Res<Time>) {
+fn client_tick(time: Res<Time>, client: Res<RenetClient>) {
     let elapsed = time.elapsed_seconds();
     let prev_elapsed = elapsed - time.delta_seconds();
     
     if (elapsed / 2.0).floor() != (prev_elapsed / 2.0).floor() {
-        println!("🔄 CLIENT: Tick: {:.2}s", elapsed);
+        if client.is_connected() {
+            println!("✅ CLIENT: Connesso - Tick: {:.2}s", elapsed);
+        } else {
+            println!("⏳ CLIENT: In attesa di connessione...");
+        }
     }
 }
 
@@ -167,7 +341,7 @@ fn setup_level(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // Pavimento visuale
+    // Pavimento
     commands.spawn(PbrBundle {
         mesh: meshes.add(Cuboid::new(20.0, 1.0, 20.0)),
         material: materials.add(Color::srgb(0.3, 0.5, 0.3)),
@@ -186,7 +360,7 @@ fn setup_level(
         ..default()
     });
 
-    // Camera
+    // Camera che segue il giocatore (semplificata per ora)
     commands.spawn(Camera3dBundle {
         transform: Transform::from_xyz(-5.0, 6.0, 8.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
