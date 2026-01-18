@@ -2,15 +2,24 @@
 
 ## DESCRIZIONE GLOBALE DEL GIOCO
 
-CHAIN GANG è uno sparatutto in prima persona (FPS) tattico a squadre (es. 3v3) cross-platform (Web & Mobile) con un'estetica Voxel/low-poly. Il suo core loop combina il gaming competitivo con la DeFi: le squadre bloccano una posta in gioco (in xDAI) su uno Smart Contract Gnosis prima di un match. Il gameplay è skill-based, con fuoco amico e fisica dei proiettili. Al termine del match, la squadra vincitrice riceve una prova crittografica dal server per sbloccare immediatamente e in modo trustless l'intero montepremi sul proprio wallet, eliminando intermediari.
+CHAIN GANG è uno sparatutto in prima persona (FPS) tattico a squadre cross-platform (Web & Mobile) con un'estetica Voxel/low-poly. 
+
+### Modalità di Gioco
+*   **1v1 fino a 4v4** - Da duelli 1v1 a battaglie 4v4 a squadre
+*   **Modalità Pratica** - Gioco libero senza scommesse per allenamento e divertimento
+*   **Modalità Scommessa** - Match competitivi con posta in palio on-chain
+
+### Meccanica DeFi (Modalità Scommessa)
+Le squadre bloccano una posta in gioco (in xDAI) su uno Smart Contract Gnosis prima di un match. Il gameplay è skill-based, con fuoco amico e fisica dei proiettili. Al termine del match, la squadra vincitrice riceve una prova crittografica dal server per sbloccare immediatamente e in modo trustless l'intero montepremi sul proprio wallet, eliminando intermediari.
 
 ## MASTER PLAN (Roadmap Globale)
 
 Il progetto procederà per fasi "giocabili" per costruire gradualmente il gioco completo.
 
 *   **FASE 1: Il Core del Gioco (Rust/Bevy)**
-    *   **Obiettivo:** Avere 2 giocatori che si connettono, si vedono e si sparano in un ambiente di test. Focus sulle meccaniche di rete solide, senza grafica avanzata o blockchain in questa fase.
-    *   **Focus Attuale.**
+    *   **Obiettivo:** Creare un FPS multiplayer funzionante con movimento, shooting e fisica.
+    *   **Tecnologie:** Rust, Bevy Engine, bevy_renet (networking)
+    *   **Stato:** IN CORSO - Step 1.3 completato ✅
 
 *   **FASE 2: L'Integrazione Web (WASM + React)**
     *   **Obiettivo:** Far girare il gioco dentro il browser (WASM) e creare l'interfaccia React attorno (Chat, Menu principale).
@@ -26,69 +35,173 @@ Il progetto procederà per fasi "giocabili" per costruire gradualmente il gioco 
 
 ## STRUTTURA DEL WORKSPACE (Monorepo)
 
+```
 chain-gang/
 │
-├── 📂 contracts/ (BLOCKCHAIN LAYER)
-│ │ # Contiene gli Smart Contract Solidity (Gnosis)
-│ ├── contracts/ # File .sol
-│ ├── test/ # Test dei contratti
-│ └── hardhat.config.js # O foundry.toml
+├── 📂 contracts/              (BLOCKCHAIN LAYER)
+│   │ # Smart Contract Solidity (Gnosis)
+│   ├── contracts/             # File .sol
+│   ├── test/                  # Test dei contratti
+│   └── hardhat.config.js
 │
-├── 📂 web-portal/ (FRONTEND LAYER - React)
-│ │ # Il sito web che l'utente visita
-│ ├── src/ # Codice React, connessione Wallet, UI
-│ ├── public/ # Qui verrà copiato il file .wasm del gioco
-│ └── package.json # Dipendenze (Vite, Ethers, React)
+├── 📂 web-portal/             (FRONTEND LAYER - React)
+│   │ # Il sito web che l'utente visita
+│   ├── src/                   # React, connessione Wallet, UI
+│   ├── public/                # Qui verrà copiato il .wasm del gioco
+│   └── package.json
 │
-├── 📂 game-engine/ (GAME LAYER - Rust Workspace)
-│ │ # Il cuore del gioco (Client e Server)
-│ ├── Cargo.toml # File che definisce il Workspace Rust
-│ │
-│ ├── 📦 game_shared/ # Logica condivisa (Protocollo, Costanti, Messaggi di rete)
-│ │ └── src/lib.rs
-│ │
-│ ├── 📦 game_server/ # Il Server Autoritario (Linux Binary)
-│ │ └── src/main.rs
-│ │
-│ └── 📦 game_client/ # Il Gioco Visuale (WASM target)
-│ └── src/main.rs
+├── 📂 game-engine/            (GAME LAYER - Rust Workspace)
+│   │ # Il cuore del gioco (Client e Server)
+│   ├── Cargo.toml             # Workspace Rust
+│   │
+│   ├── 📦 game_shared/        # Logica condivisa (Protocollo, Messaggi di rete)
+│   │   └── src/lib.rs         # PlayerInput, NetworkMessage, apply_player_movement()
+│   │
+│   ├── 📦 game_server/        # Il Server Autoritativo (Linux Binary)
+│   │   └── src/main.rs        # Gestione connessioni, fisica server-side, sync
+│   │
+│   └── 📦 game_client/        # Il Gioco Visuale (WASM target)
+│       └── src/main.rs        # Client-side prediction, rendering, input
 │
-└── 📂 infrastructure/ (OPS LAYER)
-└── docker-compose.yml # Per lanciare Redis e Server locale velocemente
+└── 📂 infrastructure/         (OPS LAYER)
+    └── docker-compose.yml
+```
 
 ## ROADMAP LOCALE (Fase 1: Game Engine)
 
-Questa è la roadmap specifica per il `game-engine`.
+### ✅ Step 1.1 - Networking Skeleton
+*   Setup del workspace Rust (3 crate: shared, server, client)
+*   Server che ascolta su porta 5000
+*   Client che si connette
+*   Scambio di eventi di connessione/disconnessione tramite `bevy_renet`
+*   **STATO: COMPLETATO** ✅
 
-*   **Step 1.1 - Networking Skeleton:**
-    *   Setup del workspace Rust.
-    *   Server che ascolta su una porta.
-    *   Client che si connette.
-    *   Obiettivo: Verificare che `bevy_renet` funzioni e stabilire una connessione base.
-    *   **STATO: COMPLETATO!** Abbiamo un server e un client che si connettono e scambiano eventi di connessione/disconnessione.
+### ✅ Step 1.2 - Synchronized Physics (Il Cubo)
+*   Integrazione di fisica manuale (no bevy_rapier per semplicità)
+*   Il server spawna un cubo che cade e rimbalza
+*   Il server invia posizione/rotazione del cubo ai client tramite `NetworkMessage::RigidBodyUpdate`
+*   Il client visualizza il cubo sincronizzato
+*   Fix del `transport.send_packets()` per inviare effettivamente i pacchetti UDP
+*   **STATO: COMPLETATO** ✅
 
-*   **Step 1.2 - Synchronized Physics (Il Cubo):**
-    *   Aggiunta di `bevy_rapier3d`.
-    *   Il server fa spawnare un cubo fisico.
-    *   Il server invia la posizione e rotazione del cubo ai client.
-    *   Il client vede il cubo muoversi e rimbalzare.
-    *   **STATO: IN CORSO.** Stiamo implementando questa parte.
+### ✅ Step 1.3 - Player Movement (Client-Side Prediction)
+*   **Input del giocatore:** WASD per muoversi, Spazio per saltare
+*   **Client-Side Prediction:** Il movimento è applicato IMMEDIATAMENTE sul client per zero lag percepito
+*   **Server Autoritativo:** Il server riceve gli input, li processa e invia lo stato aggiornato
+*   **Reconciliation:** Il client corregge la sua posizione quando riceve aggiornamenti dal server
+*   **Funzione condivisa:** `apply_player_movement()` usata sia da client che server per garantire coerenza
+*   **Multi-player:** Spawn di giocatori multipli (verde per locale, rosso per remoti)
+*   **STATO: COMPLETATO** ✅
 
-*   **Step 1.3 - Player Movement (Prediction):**
-    *   Input del giocatore (WASD).
-    *   Implementazione del sistema Client-Side Prediction.
-    *   Obiettivo: Muoversi senza sentire lag.
+### 🚧 Step 1.4 - Player Experience Refinement
+*   **Obiettivo:** Migliorare la sensazione di gioco e la fluidità del movimento
+    *   **Rotazione della camera** (mouse look) - Controllo First Person
+    *   **Camera che segue il giocatore** - Vista in terza persona o FPS
+    *   **Interpolazione** dei giocatori remoti per movimento fluido (no teleport)
+    *   **Riapplicazione degli input pendenti** dopo reconciliation per prediction perfetta
+*   **STATO: PROSSIMO STEP** 🎯
 
-*   **Step 1.4 - Voxel & Shooting:**
-    *   Generazione di un pavimento di voxel statici.
-    *   Logica dello sparo (Raycasting).
-    *   Rimozione del voxel colpito sincronizzata tra tutti i client.
+### 📋 Step 1.5 - Voxel & Shooting (Pianificato)
+*   Generazione di un ambiente voxel di base
+*   Logica dello sparo (Raycasting)
+*   Rimozione del voxel colpito sincronizzata tra tutti i client
+*   Hit detection sui giocatori
+*   Health system e respawn
 
-## DOVE SIAMO ORA (Punto Attuale)
+### 📋 Step 1.6 - Game Modes (Pianificato)
+*   Sistema di lobby per 1v1, 2v2, 3v3, 4v4
+*   Matchmaking per modalità pratica
+*   Timer di match e win conditions
+*   Scoreboard e statistiche partita
 
-Ci troviamo nello **Step 1.2 - Synchronized Physics (Il Cubo)** della Roadmap Locale del Game Engine.
+## TECNOLOGIE UTILIZZATE
 
-*   **Abbiamo un server e un client che si connettono usando `bevy_renet`.** Il server rileva le nuove connessioni e disconnessioni.
-*   **Stiamo lavorando per aggiungere `bevy_rapier3d`** per gestire la fisica.
-*   **Il prossimo obiettivo immediato è compilare correttamente il progetto** dopo l'ultima serie di modifiche ai `Cargo.toml` e a `game_shared/src/lib.rs` per risolvere i problemi di `bevy_renet::renet::Channel` e le feature di `bevy_rapier3d`.
-*   **Una volta compilato, l'aspettativa è vedere un cubo che cade e rimbalza sul pavimento nella finestra del client, sincronizzato dal server.**
+### Game Engine
+*   **Rust** - Linguaggio di programmazione (performance + safety)
+*   **Bevy 0.14** - Game Engine ECS (Entity Component System)
+*   **bevy_renet 0.0.12** - Networking library (client-server)
+*   **bincode** - Serializzazione binaria per messaggi di rete
+*   **serde** - Serializzazione/Deserializzazione
+
+### Frontend (Futuro)
+*   **React + TypeScript** - UI framework
+*   **Vite** - Build tool
+*   **Ethers.js** - Interazione con blockchain
+
+### Blockchain (Futuro)
+*   **Solidity** - Smart contracts
+*   **Hardhat** - Development environment
+*   **Gnosis Chain** - Network (xDAI)
+
+## COME ESEGUIRE IL PROGETTO
+
+### Prerequisiti
+```bash
+# Installa Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Verifica installazione
+rustc --version
+cargo --version
+```
+
+### Esecuzione del Game Engine
+
+```bash
+# Terminal 1 - Avvia il Server
+cd game-engine
+cargo run --bin game_server
+
+# Terminal 2 - Avvia il Client
+cargo run --bin game_client
+
+# (Opzionale) Terminal 3 - Secondo client per testare multiplayer
+cargo run --bin game_client
+```
+
+### Controlli di Gioco
+*   **W** - Avanti
+*   **A** - Sinistra
+*   **S** - Indietro
+*   **D** - Destra
+*   **Spazio** - Salto
+
+## NOTE TECNICHE IMPORTANTI
+
+### Architettura di Networking
+*   **Client-Server Autoritativo:** Il server è l'unica fonte di verità
+*   **Client-Side Prediction:** Il client predice il movimento per responsività immediata
+*   **Server Reconciliation:** Quando il server invia lo stato aggiornato, il client corregge eventuali divergenze
+*   **Sequence Numbers:** Ogni input ha un numero di sequenza per tracciare quale input il server ha processato
+
+### Fisica
+*   **Fisica custom:** Implementata manualmente (no bevy_rapier) per controllo totale e compatibilità WASM
+*   **Gravità:** -9.81 m/s²
+*   **Collisione pavimento:** Controllo semplice Y <= PLAYER_HEIGHT/2
+*   **Movimento:** 5.0 m/s di velocità base
+*   **Salto:** 5.0 m/s di forza verticale
+
+### Messaggi di Rete
+*   **PlayerInput:** Client → Server (input WASD + jump + sequence_number)
+*   **PlayerStateUpdate:** Server → Client (posizione, velocità, rotazione + sequence_number)
+*   **RigidBodyUpdate:** Server → Client (oggetti non-giocatore come il cubo)
+*   **PlayerConnected/Disconnected:** Server → All Clients (notifiche)
+
+## PROSSIMI PASSI (Immediati)
+
+1. ✅ Risolvere errori di compilazione (`ClientId` vs `u64`)
+2. 🎯 Implementare mouse look (rotazione camera)
+3. 🎯 Camera che segue il giocatore
+4. 🎯 Interpolazione dei giocatori remoti
+5. 🎯 Riapplicazione input pendenti (reconciliation completa)
+
+## STATO DEL PROGETTO
+
+**Ultimo aggiornamento:** 18 Gennaio 2025  
+**Fase corrente:** FASE 1 - Step 1.3 completato  
+**Prossimo milestone:** Step 1.4 - Player Experience Refinement  
+**Livello di completamento Fase 1:** ~60%
+
+---
+
+**Note:** Questo progetto è in sviluppo attivo. La documentazione viene aggiornata ad ogni step completato.
