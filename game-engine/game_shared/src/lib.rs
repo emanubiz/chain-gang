@@ -13,6 +13,8 @@ pub struct Player {
 pub struct PlayerInput {
     pub move_direction: Vec2,  // X e Z (forward/backward, left/right)
     pub jump: bool,
+    pub yaw: f32,              // Rotazione orizzontale (mouse X)
+    pub pitch: f32,            // Rotazione verticale (mouse Y)
     pub sequence_number: u32,  // Per il client-side prediction
 }
 
@@ -106,6 +108,9 @@ pub fn apply_player_movement(
     controller: &PlayerController,
     dt: f32,
 ) {
+    // Applica rotazione dal mouse (solo yaw, pitch è gestito dalla camera)
+    transform.rotation = Quat::from_rotation_y(input.yaw);
+    
     // Calcola la direzione di movimento nel mondo
     let forward = transform.forward();
     let right = transform.right();

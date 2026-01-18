@@ -26,6 +26,13 @@ struct SynchronizedEntities {
 #[derive(Resource)]
 struct LocalPlayer(Entity);
 
+/// Risorsa per tracciare la rotazione della camera (mouse look)
+#[derive(Resource, Default)]
+struct CameraRotation {
+    yaw: f32,   // Rotazione orizzontale
+    pitch: f32, // Rotazione verticale
+}
+
 /// Storico degli input inviati (per reconciliation)
 #[derive(Resource, Default)]
 struct InputHistory {
@@ -81,11 +88,14 @@ fn main() {
         .add_plugins(RenetClientPlugin)
         .insert_resource(SynchronizedEntities::default())
         .insert_resource(InputHistory::default())
+        .insert_resource(CameraRotation::default())
         .add_systems(Startup, (setup_level, setup_network).chain())
         .add_systems(Update, (
             update_transport,
+            handle_mouse_look,
             handle_input,
             apply_local_prediction,
+            update_camera_position,
             receive_network_messages,
             client_tick,
         ).chain())
@@ -124,10 +134,31 @@ fn setup_network(mut commands: Commands) {
     commands.insert_resource(OurClientId(client_id));
 }
 
+fn handle_mouse_look(
+    mut camera_rotation: ResMut<CameraRotation>,
+    mut mouse_motion: EventReader<bevy::input::mouse::MouseMotion>,
+    mouse_button: Res<ButtonInput<bevy::input::mouse::MouseButton>>,
+) {
+    // Solo se il tasto destro del mouse è premuto (per non bloccare il cursore)
+    if mouse_button.pressed(bevy::input::mouse::MouseButton::Right) {
+        for motion in mouse_motion.read() {
+            // Sensibilità mouse
+            let sensitivity = 0.003;
+            
+            camera_rotation.yaw -= motion.delta.x * sensitivity;
+            camera_rotation.pitch -= motion.delta.y * sensitivity;
+            
+            // Limita il pitch per non girare la testa troppo (no backflip)
+            camera_rotation.pitch = camera_rotation.pitch.clamp(-1.5, 1.5);
+        }
+    }
+}
+
 fn handle_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     mut client: ResMut<RenetClient>,
     mut input_history: ResMut<InputHistory>,
+    camera_rotation: Res<CameraRotation>,
     local_player: Option<Res<LocalPlayer>>,
 ) {
     // Aspetta che il giocatore locale sia spawnato
@@ -162,6 +193,8 @@ fn handle_input(
     let input = PlayerInput {
         move_direction,
         jump,
+        yaw: camera_rotation.yaw,
+        pitch: camera_rotation.pitch,
         sequence_number: 0, // Verrà assegnato da input_history
     };
     
@@ -175,6 +208,27 @@ fn handle_input(
     let msg = NetworkMessage::PlayerInput(input_with_seq);
     if let Ok(data) = bincode::serialize(&msg) {
         client.send_message(0, data);
+    }
+}
+
+fn update_camera_position(
+    local_player: Option<Res<LocalPlayer>>,
+    player_query: Query<&Transform, With<PlayerController>>,
+    mut camera_query: Query<&mut Transform, (With<Camera3d>, Without<PlayerController>)>,
+    camera_rotation: Res<CameraRotation>,
+) {
+    if let Some(local_player) = local_player {
+        if let Ok(player_transform) = player_query.get(local_player.0) {
+            if let Ok(mut camera_transform) = camera_query.get_single_mut() {
+                // Posizione camera: testa del giocatore (y = 0.6 dalla base)
+                let eye_height = 0.6;
+                camera_transform.translation = player_transform.translation + Vec3::new(0.0, eye_height, 0.0);
+                
+                // Rotazione camera: yaw dal giocatore + pitch dalla camera
+                camera_transform.rotation = Quat::from_rotation_y(camera_rotation.yaw) 
+                    * Quat::from_rotation_x(camera_rotation.pitch);
+            }
+        }
     }
 }
 
@@ -445,9 +499,20 @@ fn setup_level(
         ..default()
     });
 
-    // Camera che segue il giocatore (semplificata per ora)
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(-5.0, 6.0, 8.0).looking_at(Vec3::ZERO, Vec3::Y),
+    // Camera FPS
+    let camera = commands.spawn(Camera3dBundle {
+        transform: Transform::from_xyz(0.0, 2.0, 0.0),
         ..default()
-    });
+    }).id();
+    
+    // Arma (cubo voxel che rappresenta un mitra)
+    let weapon = commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(0.1, 0.05, 0.3)), // Lungo e stretto
+        material: materials.add(Color::srgb(0.2, 0.2, 0.2)), // Grigio scuro
+        transform: Transform::from_xyz(0.3, -0.2, -0.4), // Destra, basso, davanti
+        ..default()
+    }).id();
+    
+    // Attacca l'arma alla camera
+    commands.entity(camera).add_child(weapon);
 }
