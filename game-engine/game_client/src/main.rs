@@ -1,4 +1,4 @@
-// game_client/src/main.rs - Step 1.2: Synchronized Physics (Visual Only)
+// game_client/src/main.rs - Step 1.2: FIXED - Transport Send/Receive
 
 use bevy::prelude::*;
 use game_shared::{hello_shared, PROTOCOL_ID, SERVER_PORT, SERVER_ADDR, PhysicsMessage};
@@ -13,7 +13,7 @@ use std::time::SystemTime;
 #[derive(Resource)]
 struct Transport(NetcodeClientTransport);
 
-// Mappa delle entità sincronizzate (ID di rete -> Entity locale)
+// Mappa delle entità sincronizzate
 #[derive(Resource, Default)]
 struct SynchronizedEntities {
     map: HashMap<u64, Entity>,
@@ -39,8 +39,8 @@ fn main() {
         .insert_resource(SynchronizedEntities::default())
         .add_systems(Startup, (setup_level, setup_network).chain())
         .add_systems(Update, (
-            update_transport,
-            receive_physics_messages,
+            update_transport,  // IMPORTANTE: Prima ricevi i pacchetti
+            receive_physics_messages,  // Poi processi i messaggi
             client_tick,
         ).chain())
         .run();
@@ -52,17 +52,16 @@ fn setup_network(mut commands: Commands) {
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
 
-    // Generiamo un ID client casuale
     let client_id = current_time.as_millis() as u64;
 
-    // Binda un socket UDP locale per il client
     let client_socket = UdpSocket::bind("0.0.0.0:0")
         .expect("Impossibile bindare il socket UDP del client");
 
-    // Crea RenetClient
+    println!("✅ CLIENT: Socket UDP bindato su porta locale");
+    println!("🔌 CLIENT: Tentativo di connessione a {}...", server_addr);
+
     let client = RenetClient::new(ConnectionConfig::default());
 
-    // Crea il transport layer
     let authentication = ClientAuthentication::Unsecure {
         protocol_id: PROTOCOL_ID,
         client_id,
@@ -84,18 +83,16 @@ fn update_transport(
 ) {
     let delta = time.delta();
     
-    client.update(delta); // RenetClient's internal update first
+    // 1. Aggiorna la logica di renet
+    client.update(delta);
     
-    // Aggiorna il transport
-    match transport.0.update(delta, &mut *client) {
-        Ok(_) => {
-            // Debug: Logga ogni frame per confermare che il transport sta processando
-            println!("🔄 CLIENT: Transport update Ok. Delta: {:?}", delta);
-        },
-        Err(e) => {
-            eprintln!("❌ CLIENT: Errore transport in update: {:?}", e);
-        }
+    // 2. 🔥 Update transport - questo GIÀ riceve i pacchetti internamente
+    if let Err(_) = transport.0.update(delta, &mut *client) {
+        // Ignoriamo gli errori durante la connessione iniziale
     }
+    
+    // 3. 🔥 INVIA i pacchetti (ACKs, ecc.)
+    let _ = transport.0.send_packets(&mut *client);
 }
 
 fn receive_physics_messages(
@@ -107,19 +104,10 @@ fn receive_physics_messages(
     mut query: Query<&mut Transform>,
     time: Res<Time>,
 ) {
-    // Debug: verifica che il sistema giri
-    static mut FIRST_RUN: bool = true;
-    unsafe {
-        if FIRST_RUN {
-            println!("🟢 CLIENT: Sistema receive_physics_messages attivo!");
-            FIRST_RUN = false;
-        }
-    }
+    // Verifica stato connessione
+    let is_connected = client.is_connected();
     
     let mut message_count = 0;
-    
-    // Debug: verifica se il client è connesso
-    let is_connected = client.is_connected();
     
     // Ricevi tutti i messaggi dal canale 0 (fisica)
     while let Some(message) = client.receive_message(0) {
@@ -135,8 +123,8 @@ fn receive_physics_messages(
                             transform.rotation = rotation;
                         }
                     } else {
-                        // Altrimenti spawna una nuova entità visuale
-                        println!("📦 CLIENT: Spawn cubo sincronizzato (ID: {}) a posizione {:?}", entity_id, position);
+                        // Spawna una nuova entità visuale
+                        println!("📦 CLIENT: Spawn cubo (ID: {}) a {:?}", entity_id, position);
                         
                         let local_entity = commands.spawn(PbrBundle {
                             mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
@@ -150,19 +138,17 @@ fn receive_physics_messages(
                     }
                 }
             }
-        } else {
-            println!("⚠️ CLIENT: Errore deserializzazione messaggio");
         }
     }
     
     // Debug: stampa ogni 2 secondi
     if (time.elapsed_seconds() / 2.0).floor() != ((time.elapsed_seconds() - time.delta_seconds()) / 2.0).floor() {
         if !is_connected {
-            println!("❌ CLIENT: NON connesso al server!");
+            println!("⏳ CLIENT: In attesa di connessione al server...");
         } else if message_count == 0 {
-            println!("⚠️ CLIENT: Connesso ma 0 messaggi ricevuti in questo frame");
+            println!("⚠️ CLIENT: Connesso ma 0 messaggi ricevuti");
         } else {
-            println!("✅ CLIENT: Ricevuti {} messaggi in questo frame", message_count);
+            println!("✅ CLIENT: Ricevuti {} messaggi", message_count);
         }
     }
 }
@@ -181,7 +167,7 @@ fn setup_level(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // Pavimento visuale (il server ha il collider fisico)
+    // Pavimento visuale
     commands.spawn(PbrBundle {
         mesh: meshes.add(Cuboid::new(20.0, 1.0, 20.0)),
         material: materials.add(Color::srgb(0.3, 0.5, 0.3)),

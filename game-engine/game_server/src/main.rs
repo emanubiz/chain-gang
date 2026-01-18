@@ -1,4 +1,4 @@
-// game_server/src/main.rs - Step 1.2: Synchronized Physics (Simple Manual Physics)
+// game_server/src/main.rs - Step 1.2: FIXED - Transport Send/Receive
 
 use bevy::prelude::*;
 use bevy::app::ScheduleRunnerPlugin;
@@ -44,10 +44,10 @@ fn main() {
         .add_plugins(RenetServerPlugin)
         .add_systems(Startup, (setup_network, setup_physics).chain())
         .add_systems(Update, (
-            update_transport,
             handle_server_events,
-            apply_physics,        // Sistema di fisica manuale
+            apply_physics,
             sync_physics_to_clients,
+            update_transport,  // IMPORTANTE: Questo deve essere DOPO sync_physics
             server_tick,
         ).chain())
         .run();
@@ -62,6 +62,8 @@ fn setup_network(mut commands: Commands) {
     // Crea socket UDP
     let socket = UdpSocket::bind(server_addr)
         .expect("Impossibile bindare il socket UDP del server");
+
+    println!("✅ SERVER: Socket UDP bindato su {}", server_addr);
 
     // Crea RenetServer
     let server = RenetServer::new(ConnectionConfig::default());
@@ -101,7 +103,7 @@ fn setup_physics(mut commands: Commands) {
         PhysicsBody {
             velocity: Vec3::ZERO,
             gravity: -9.81,
-            bounciness: 0.7, // Coefficiente di rimbalzo
+            bounciness: 0.7,
         },
         BoxCollider {
             half_extents: Vec3::new(0.5, 0.5, 0.5),
@@ -126,16 +128,13 @@ fn apply_physics(
         // Applica velocità
         transform.translation += body.velocity * dt;
         
-        // Collisione semplice con il pavimento (y = 0.5, che è floor_y + floor_half_height + cube_half_height)
+        // Collisione con il pavimento
         let ground_level = 0.5 + collider.half_extents.y;
         
         if transform.translation.y <= ground_level {
             transform.translation.y = ground_level;
-            
-            // Rimbalzo
             body.velocity.y = -body.velocity.y * body.bounciness;
             
-            // Se la velocità è troppo bassa, ferma il cubo
             if body.velocity.y.abs() < 0.1 {
                 body.velocity.y = 0.0;
             }
@@ -149,12 +148,18 @@ fn update_transport(
     time: Res<Time>,
 ) {
     let delta = time.delta();
+    
+    // 1. Aggiorna la logica di renet
     server.update(delta);
     
-    // Aggiorna il transport
+    // 2. Aggiorna il transport (gestisce connessioni/disconnessioni)
     if let Err(e) = transport.0.update(delta, &mut *server) {
-        eprintln!("❌ Errore transport: {:?}", e);
+        eprintln!("❌ Errore transport update: {:?}", e);
     }
+    
+    // 3. 🔥 QUESTO È IL PEZZO MANCANTE! 🔥
+    // Invia effettivamente i pacchetti sul socket UDP
+    transport.0.send_packets(&mut *server);
 }
 
 fn sync_physics_to_clients(
@@ -171,20 +176,20 @@ fn sync_physics_to_clients(
             rotation: transform.rotation,
         };
 
-        // Debug: stampa la posizione del cubo ogni 2 secondi
+        // Debug: stampa ogni 2 secondi
         if (time.elapsed_seconds() / 2.0).floor() != ((time.elapsed_seconds() - time.delta_seconds()) / 2.0).floor() {
             let client_count = server.clients_id().len();
+            println!("📦 SERVER: Cubo a pos={:.2?}, vel={:.2?}", transform.translation, body.velocity);
             if client_count > 0 {
-                println!("🔄 Sincronizzando con {} client(i)", client_count);
+                println!("🔄 SERVER: {} client(i) connesso/i", client_count);
+            } else {
+                println!("⚠️  SERVER: Nessun client connesso");
             }
-            println!("📦 Cubo: pos={:.2?}, vel={:.2?}, rot={:.2?}", transform.translation, body.velocity, transform.rotation);
         }
 
         // Serializza e invia a tutti i client connessi
         if let Ok(message_data) = bincode::serialize(&message) {
-            let message_size = message_data.len();
             for client_id in server.clients_id() {
-                 println!("[SERVER SEND] In coda messaggio per client {}, dimensione: {} bytes", client_id, message_size);
                 server.send_message(client_id, 0, message_data.clone());
             }
         }
@@ -195,10 +200,10 @@ fn handle_server_events(mut server_events: EventReader<ServerEvent>) {
     for event in server_events.read() {
         match event {
             ServerEvent::ClientConnected { client_id } => {
-                println!("✅ SERVER: Client {} si è connesso.", client_id);
+                println!("✅ SERVER: Client {} connesso!", client_id);
             }
             ServerEvent::ClientDisconnected { client_id, reason } => {
-                println!("❌ SERVER: Client {} si è disconnesso: {:?}", client_id, reason);
+                println!("❌ SERVER: Client {} disconnesso: {:?}", client_id, reason);
             }
         }
     }
