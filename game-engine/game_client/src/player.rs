@@ -175,8 +175,6 @@ pub fn spawn_voxel_player(
     let pants_mat = materials.add(pants_color);
     let shoe_mat = materials.add(Color::srgb(0.95, 0.95, 0.95));
     let accessory_mat = materials.add(Color::srgb(0.1, 0.1, 0.1));
-    let weapon_mat = materials.add(Color::srgb(0.15, 0.15, 0.18));
-    let weapon_detail_mat = materials.add(Color::srgb(0.8, 0.1, 0.1));
 
     // CORREZIONE: Il parent ora è a Y=0 (piedi a terra)
     // Gli offset dei componenti partono da 0 verso l'alto
@@ -286,14 +284,14 @@ pub fn spawn_voxel_player(
 
     // BRACCIO SINISTRO
     let arm_offset_x = BODY_WIDTH / 2.0 + ARM_WIDTH / 2.0;
-    commands.spawn(PbrBundle {
+    let left_arm = commands.spawn(PbrBundle {
         mesh: meshes.add(Cuboid::new(ARM_WIDTH, ARM_HEIGHT, ARM_DEPTH)),
         material: shirt_mat.clone(),
         transform: Transform::from_xyz(-arm_offset_x, ARM_Y_OFFSET, 0.0),
         ..default()
-    }).set_parent(body);
+    }).id();
 
-    // BRACCIO DESTRO con ARMA
+    // BRACCIO DESTRO
     let right_arm = commands.spawn(PbrBundle {
         mesh: meshes.add(Cuboid::new(ARM_WIDTH, ARM_HEIGHT, ARM_DEPTH)),
         material: shirt_mat.clone(),
@@ -301,43 +299,25 @@ pub fn spawn_voxel_player(
         ..default()
     }).id();
 
-    // ARMA attaccata al braccio destro
-    let weapon = commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(0.12, 0.06, 0.4)),
-        material: weapon_mat,
-        // Posizione relativa al braccio destro
-        transform: Transform::from_xyz(0.0, -ARM_HEIGHT/2.0 + 0.1, 0.3)
-            .with_rotation(Quat::from_rotation_x(-0.3)), // Inclinata leggermente
-        ..default()
-    }).id();
-    
-    // Mirino dell'arma
-    let sight = commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(0.04, 0.04, 0.04)),
-        material: weapon_detail_mat,
-        transform: Transform::from_xyz(0.0, 0.05, -0.15),
-        ..default()
-    }).id();
-    
-    commands.entity(weapon).add_child(sight);
-    commands.entity(right_arm).add_child(weapon);
-    commands.entity(body).add_child(right_arm);
+    commands.entity(body).push_children(&[left_arm, right_arm]);
 
     // GAMBE
     let leg_offset_x = BODY_WIDTH * 0.25;
-    commands.spawn(PbrBundle {
+    let left_leg = commands.spawn(PbrBundle {
         mesh: meshes.add(Cuboid::new(LEG_WIDTH, LEG_HEIGHT, LEG_DEPTH)),
         material: pants_mat.clone(),
         transform: Transform::from_xyz(-leg_offset_x, LEG_Y_OFFSET, 0.0),
         ..default()
-    }).set_parent(body);
+    }).id();
 
-    commands.spawn(PbrBundle {
+    let right_leg = commands.spawn(PbrBundle {
         mesh: meshes.add(Cuboid::new(LEG_WIDTH, LEG_HEIGHT, LEG_DEPTH)),
         material: pants_mat,
         transform: Transform::from_xyz(leg_offset_x, LEG_Y_OFFSET, 0.0),
         ..default()
-    }).set_parent(body);
+    }).id();
+
+    commands.entity(body).push_children(&[left_leg, right_leg]);
 
     // SCARPE a terra (Y=0)
     let shoe_height = 0.10;

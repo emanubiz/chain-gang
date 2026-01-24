@@ -9,6 +9,8 @@ mod player;
 mod camera;
 mod debug;
 mod level;
+mod weapon;
+mod hud;  // <--- QUESTO MANCAVA
 
 fn main() {
     println!("🎮 CLIENT: Avvio grafica e connessione...");
@@ -20,7 +22,6 @@ fn main() {
                 primary_window: Some(Window {
                     title: "CHAIN GANG - Client".into(),
                     resolution: (1280., 720.).into(),
-                    // Imposta il cursore come grabbed all'avvio
                     cursor: bevy::window::Cursor {
                         grab_mode: bevy::window::CursorGrabMode::Locked,
                         visible: false,
@@ -34,29 +35,31 @@ fn main() {
         .insert_resource(ClearColor(Color::srgb(0.15, 0.18, 0.25)))
         .add_plugins(RenetClientPlugin)
         
-        // Risorse del client
         .insert_resource(network::SynchronizedEntities::default())
         .insert_resource(player::InputHistory::default())
         .insert_resource(camera::CameraRotation::default())
         .insert_resource(camera::CameraSettings::default())
+        .insert_resource(hud::PlayerHealthUI::default())
 
-        // Setup iniziale
         .add_systems(Startup, (
             level::setup_level,
             network::setup_network,
+            hud::setup_hud,
         ).chain())
         
-        // Update loop
         .add_systems(Update, (
             network::update_transport,
+            network::receive_network_messages,
             camera::toggle_mouse_grab,
             camera::handle_mouse_look,
             player::handle_input,
             player::apply_local_prediction,
-            // Usa update_camera_position OPPURE smooth_camera_follow
             camera::update_camera_position,
-            // camera::smooth_camera_follow, // <-- Decommenta per camera smooth
-            network::receive_network_messages,
+            weapon::handle_shooting,
+            weapon::update_projectiles,
+            weapon::cleanup_muzzle_flash,
+            weapon::cleanup_hit_markers,
+            hud::update_health_ui,
             debug::client_tick,
         ).chain())
         .run();

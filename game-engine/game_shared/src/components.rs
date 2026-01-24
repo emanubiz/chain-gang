@@ -1,9 +1,6 @@
 // game_shared/src/components.rs
 
 use bevy::prelude::*;
-// Non c'è bisogno di `use serde::{Deserialize, Serialize};` qui,
-// perché i componenti stessi non vengono serializzati/deserializzati direttamente in questo file.
-// Sono i messaggi di rete che li contengono a dover essere serializzabili.
 
 /// Componente che rappresenta un giocatore nel gioco
 #[derive(Component)]
@@ -23,8 +20,8 @@ pub struct PlayerController {
 impl Default for PlayerController {
     fn default() -> Self {
         Self {
-            move_speed: 5.0,
-            jump_force: 7.5,
+            move_speed: 20.0,  // VELOCITA
+            jump_force: 24.0,  // SALTO
             grounded: false,
         }
     }
@@ -34,14 +31,14 @@ impl Default for PlayerController {
 #[derive(Component, Clone, Copy)]
 pub struct PlayerPhysics {
     pub velocity: Vec3,
-    pub gravity: f32, // <--- Corretto da f332 a f32
+    pub gravity: f32,
 }
 
 impl Default for PlayerPhysics {
     fn default() -> Self {
         Self {
             velocity: Vec3::ZERO,
-            gravity: -18.0,
+            gravity: -150.0, // GRAVITÀ
         }
     }
 }

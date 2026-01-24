@@ -1,16 +1,10 @@
-// game_server/src/main.rs - Step 1.3: Player Movement (Server)
+// game_server/src/main.rs
 
 use bevy::prelude::*;
 use bevy::app::ScheduleRunnerPlugin;
-// Importa direttamente gli elementi necessari dal crate game_shared modularizzato
 use game_shared::{
-    hello_shared,
-    GameConfig,
-    Player, PlayerController, PlayerPhysics,
-    PROTOCOL_ID,
-    NetworkMessage,
-    PhysicsBody, BoxCollider,
-    PLAYER_HEIGHT, // Per la collisione con il pavimento
+    hello_shared, GameConfig, Player, PlayerController, PlayerPhysics, PlayerHealth,
+    PROTOCOL_ID, NetworkMessage, PhysicsBody, BoxCollider, PLAYER_HEIGHT, WeaponStats,
 };
 use bevy_renet::renet::{ConnectionConfig, RenetServer, ServerEvent};
 use bevy_renet::renet::transport::{NetcodeServerTransport, ServerAuthentication, ServerConfig};
@@ -22,13 +16,11 @@ use std::time::{Duration, SystemTime};
 #[derive(Resource)]
 struct Transport(NetcodeServerTransport);
 
-/// Mappa Client ID -> Player Entity
 #[derive(Resource, Default)]
 struct PlayerRegistry {
     map: HashMap<u64, Entity>,
 }
 
-/// Risorsa per il cubo che cade (separato dai giocatori)
 #[derive(Resource)]
 struct FallingCube(Entity);
 
@@ -48,8 +40,10 @@ fn main() {
         .add_systems(Update, (
             handle_server_events,
             handle_player_inputs,
+            handle_shooting,
             apply_player_physics,
             apply_cube_physics,
+            check_player_deaths,
             sync_to_clients,
             update_transport,
             server_tick,
@@ -89,15 +83,13 @@ fn setup_network(mut commands: Commands) {
 fn setup_level(mut commands: Commands) {
     println!("🔧 SERVER: Setup livello in corso...");
     
-    // Pavimento (collider statico)
     commands.spawn((
         Transform::from_xyz(0.0, 0.0, 0.0),
         BoxCollider {
-            half_extents: Vec3::new(10.0, 0.5, 10.0),
+            half_extents: Vec3::new(25.0, 0.5, 25.0), // Mappa più grande: 50x50
         },
     ));
 
-    // Cubo che cade (fisica separata dai giocatori)
     let cube_entity = commands.spawn((
         Transform::from_xyz(0.0, 5.0, 0.0),
         PhysicsBody {
@@ -112,7 +104,7 @@ fn setup_level(mut commands: Commands) {
 
     commands.insert_resource(FallingCube(cube_entity));
     
-    println!("✅ SERVER: Livello pronto");
+    println!("✅ SERVER: Livello pronto (Mappa 50x50)");
 }
 
 fn handle_server_events(
@@ -128,11 +120,11 @@ fn handle_server_events(
                 let client_id_u64 = client_id.raw();
                 println!("✅ SERVER: Client {} connesso!", client_id_u64);
                 
-                // Spawna l'entità del giocatore
                 let player_entity = commands.spawn((
                     Transform::from_xyz(0.0, 2.0, 0.0),
                     PlayerController::default(),
                     PlayerPhysics::default(),
+                    PlayerHealth::default(),
                     Player {
                         id: client_id_u64,
                         username: format!("Player{}", client_id_u64),
@@ -141,7 +133,6 @@ fn handle_server_events(
                 
                 player_registry.map.insert(client_id_u64, player_entity);
                 
-                // 1. Invia al nuovo client la lista dei giocatori già presenti
                 for (entity, transform, player) in existing_players_query.iter() {
                     let msg = NetworkMessage::PlayerConnected {
                         entity_id: entity.index() as u64,
@@ -151,7 +142,6 @@ fn handle_server_events(
                         server.send_message(*client_id, 0, data.clone());
                     }
                     
-                    // Invia anche la posizione corrente
                     let state_msg = NetworkMessage::PlayerStateUpdate(game_shared::network_messages::PlayerState {
                         entity_id: entity.index() as u64,
                         position: transform.translation,
@@ -164,7 +154,6 @@ fn handle_server_events(
                     }
                 }
                 
-                // 2. Notifica TUTTI i client del nuovo giocatore
                 let msg = NetworkMessage::PlayerConnected {
                     entity_id: player_entity.index() as u64,
                     client_id: client_id_u64,
@@ -184,7 +173,6 @@ fn handle_server_events(
                 if let Some(player_entity) = player_registry.map.remove(&client_id_u64) {
                     commands.entity(player_entity).despawn();
                     
-                    // Notifica tutti i client
                     let msg = NetworkMessage::PlayerDisconnected {
                         entity_id: player_entity.index() as u64,
                     };
@@ -206,20 +194,17 @@ fn handle_player_inputs(
 ) {
     let dt = time.delta_seconds();
     
-    // Per ogni client connesso, processa gli input
     for client_id in server.clients_id() {
         let client_id_u64 = client_id.raw();
         
+        // CANALE 0 solo per PlayerInput
         while let Some(message) = server.receive_message(client_id, 0) {
             if let Ok(NetworkMessage::PlayerInput(input)) = bincode::deserialize::<NetworkMessage>(&message) {
-                // Trova l'entità del giocatore
                 if let Some(&player_entity) = player_registry.map.get(&client_id_u64) {
                     if let Ok((mut transform, mut physics, mut controller)) = query.get_mut(player_entity) {
-                        // Controlla se il giocatore è a terra
                         controller.grounded = transform.translation.y <= PLAYER_HEIGHT / 2.0 + 0.01;
                         
-                        // Applica il movimento (funzione condivisa con il client)
-                        game_shared::apply_player_movement( // Usa il percorso completo per la funzione
+                        game_shared::apply_player_movement(
                             &input,
                             &mut transform,
                             &mut physics,
@@ -233,11 +218,134 @@ fn handle_player_inputs(
     }
 }
 
+fn handle_shooting(
+    mut server: ResMut<RenetServer>,
+    player_registry: Res<PlayerRegistry>,
+    mut player_query: Query<(&Transform, &mut PlayerHealth, &Player)>,
+) {
+    let mut shots_to_process = Vec::new();
+
+    for client_id in server.clients_id() {
+        let client_id_u64 = client_id.raw();
+        
+        // USA CANALE 1 per shooting invece di 0
+        while let Some(message) = server.receive_message(client_id, 1) {
+            if let Ok(NetworkMessage::PlayerShoot { origin, direction, weapon_type }) = bincode::deserialize::<NetworkMessage>(&message) {
+                shots_to_process.push((client_id_u64, origin, direction, weapon_type));
+                println!("🔫 SERVER: Ricevuto sparo da client {}", client_id_u64);
+            }
+        }
+    }
+
+    for (shooter_id, origin, direction, weapon_type) in shots_to_process {
+        let stats = WeaponStats::from_type(weapon_type);
+        
+        println!("💥 SERVER: Player {} sparato con {:?}", shooter_id, weapon_type);
+
+        let mut closest_hit: Option<(Entity, Vec3, f32)> = None;
+        let mut min_distance = f32::MAX;
+
+        for (target_transform, _, target_player) in player_query.iter() {
+            if target_player.id == shooter_id {
+                continue;
+            }
+
+            let to_target = target_transform.translation - origin;
+            let distance = to_target.length();
+
+            if distance > stats.range {
+                continue;
+            }
+
+            let dot = direction.normalize().dot(to_target.normalize());
+            if dot < 0.95 {
+                continue;
+            }
+
+            let closest_point = origin + direction.normalize() * distance;
+            let distance_to_ray = (target_transform.translation - closest_point).length();
+
+            if distance_to_ray < PLAYER_HEIGHT && distance < min_distance {
+                min_distance = distance;
+                closest_hit = Some((
+                    player_registry.map.iter()
+                        .find(|(_, &e)| player_query.get(e).map(|(_, _, p)| p.id) == Ok(target_player.id))
+                        .map(|(_, &e)| e)
+                        .unwrap(),
+                    target_transform.translation,
+                    stats.damage
+                ));
+            }
+        }
+
+        if let Some((hit_entity, hit_pos, damage)) = closest_hit {
+            if let Ok((_, mut health, target_player)) = player_query.get_mut(hit_entity) {
+                health.take_damage(damage);
+                
+                println!("🎯 SERVER: Player {} colpito da Player {}! Danno: {} HP, Rimasti: {}/{}", 
+                    target_player.id, shooter_id, damage, health.current, health.max);
+
+                // Invia aggiornamento vita al player colpito
+                let health_msg = NetworkMessage::HealthUpdate {
+                    entity_id: hit_entity.index() as u64,
+                    current_health: health.current,
+                    max_health: health.max,
+                };
+                if let Ok(data) = bincode::serialize(&health_msg) {
+                    server.broadcast_message(0, data);
+                }
+
+                // Invia feedback visivo a tutti
+                let hit_msg = NetworkMessage::ProjectileHit {
+                    position: hit_pos,
+                    damage,
+                };
+                if let Ok(data) = bincode::serialize(&hit_msg) {
+                    server.broadcast_message(0, data);
+                }
+            }
+        } else {
+            println!("💨 SERVER: Player {} ha mancato il colpo", shooter_id);
+        }
+    }
+}
+
+fn check_player_deaths(
+    mut server: ResMut<RenetServer>,
+    mut commands: Commands,
+    query: Query<(Entity, &PlayerHealth, &Player)>,
+) {
+    for (entity, health, player) in query.iter() {
+        if !health.is_alive() {
+            println!("💀 SERVER: Player {} morto!", player.id);
+
+            let msg = NetworkMessage::PlayerDied {
+                entity_id: entity.index() as u64,
+                killer_id: None,
+            };
+            if let Ok(data) = bincode::serialize(&msg) {
+                server.broadcast_message(0, data);
+            }
+
+            commands.entity(entity)
+                .insert(PlayerHealth::default())
+                .insert(Transform::from_xyz(0.0, 2.0, 0.0));
+
+            let respawn_msg = NetworkMessage::PlayerRespawn {
+                entity_id: entity.index() as u64,
+                position: Vec3::new(0.0, 2.0, 0.0),
+            };
+            if let Ok(data) = bincode::serialize(&respawn_msg) {
+                server.broadcast_message(0, data);
+            }
+        }
+    }
+}
+
 fn apply_player_physics(
     mut query: Query<(&mut Transform, &mut PlayerPhysics, &mut PlayerController)>,
 ) {
     for (mut transform, mut physics, mut controller) in query.iter_mut() {
-        // Collisione con il pavimento
         if transform.translation.y <= PLAYER_HEIGHT / 2.0 {
             transform.translation.y = PLAYER_HEIGHT / 2.0;
             physics.velocity.y = 0.0;
@@ -277,14 +385,13 @@ fn sync_to_clients(
     cube_query: Query<(Entity, &Transform), With<PhysicsBody>>,
     falling_cube: Res<FallingCube>,
 ) {
-    // Invia lo stato di ogni giocatore
     for (entity, transform, physics, _player) in player_query.iter() {
-        let state = game_shared::network_messages::PlayerState { // Specifica il percorso completo
+        let state = game_shared::network_messages::PlayerState {
             entity_id: entity.index() as u64,
             position: transform.translation,
             velocity: physics.velocity,
             rotation: transform.rotation,
-            sequence_number: 0, // TODO: tracciare sequence number
+            sequence_number: 0,
         };
         
         let msg = NetworkMessage::PlayerStateUpdate(state);
@@ -294,7 +401,6 @@ fn sync_to_clients(
         }
     }
     
-    // Invia lo stato del cubo che cade
     if let Ok((entity, transform)) = cube_query.get(falling_cube.0) {
         let msg = NetworkMessage::RigidBodyUpdate {
             entity_id: entity.index() as u64,

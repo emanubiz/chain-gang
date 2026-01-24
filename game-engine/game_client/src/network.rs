@@ -5,16 +5,14 @@ use bevy_renet::renet::{ConnectionConfig, RenetClient};
 use bevy_renet::renet::transport::{NetcodeClientTransport, ClientAuthentication};
 
 use game_shared::{
-    PROTOCOL_ID,
-    GameConfig,
-    NetworkMessage, PlayerController, PlayerPhysics
+    PROTOCOL_ID, GameConfig, NetworkMessage, PlayerController, PlayerPhysics, WeaponType,
 };
 use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::time::SystemTime;
 
-// Importa dal modulo locale 'player'
 use super::player::{spawn_voxel_player, LocalPlayer, InputHistory};
+use super::weapon::spawn_weapon;
 
 #[derive(Resource)]
 pub struct Transport(pub NetcodeClientTransport);
@@ -79,6 +77,7 @@ pub fn receive_network_messages(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut synchronized_entities: ResMut<SynchronizedEntities>,
     mut input_history: ResMut<InputHistory>,
+    mut health_ui: ResMut<crate::hud::PlayerHealthUI>,
     local_player: Option<Res<LocalPlayer>>,
     our_client_id: Res<OurClientId>,
     mut local_query: Query<(&mut Transform, &mut PlayerPhysics), With<PlayerController>>,
@@ -100,20 +99,36 @@ pub fn receive_network_messages(
                         &mut commands,
                         &mut meshes,
                         &mut materials,
-                        Vec3::new(0.0, 2.0, 0.0),
+                        Vec3::new(0.0, 0.0, 0.0), // Spawna a Y=0 (piedi a terra)
                         player_color,
                     );
                     
+                    // Se è il nostro player locale
                     if our_client_id.0 == client_id {
                         commands.entity(player_entity).insert(PlayerController::default());
                         commands.insert_resource(LocalPlayer(player_entity));
+
+                        // Spawna l'arma e attaccala al player
+                        // Per ora la attacchiamo direttamente al player entity
+                        // TODO: in futuro trovare il braccio destro specifico
+                        let weapon = spawn_weapon(
+                            &mut commands,
+                            &mut meshes,
+                            &mut materials,
+                            WeaponType::Rifle, // Default: Rifle
+                        );
+                        
+                        // Attacca l'arma al player principale
+                        commands.entity(player_entity).add_child(weapon);
+                        println!("🔫 CLIENT: Arma Rifle spawnata per il player locale");
                     }
+                    
                     synchronized_entities.map.insert(entity_id, player_entity);
                 }
                 
                 NetworkMessage::PlayerDisconnected { entity_id } => {
                     if let Some(entity) = synchronized_entities.map.remove(&entity_id) {
-                        commands.entity(entity).despawn();
+                        commands.entity(entity).despawn_recursive();
                     }
                 }
                 
@@ -159,6 +174,44 @@ pub fn receive_network_messages(
                         
                         synchronized_entities.map.insert(entity_id, cube_entity);
                     }
+                }
+
+                NetworkMessage::HealthUpdate { entity_id, current_health, max_health } => {
+                    println!("💚 CLIENT: Health update - Entity {}: {}/{}", 
+                        entity_id, current_health, max_health);
+                    
+                    // Aggiorna UI se è il nostro player
+                    if let Some(local_player) = &local_player {
+                        if let Some(&entity) = synchronized_entities.map.get(&entity_id) {
+                            if entity == local_player.0 {
+                                health_ui.current = current_health;
+                                health_ui.max = max_health;
+                            }
+                        }
+                    }
+                }
+
+                NetworkMessage::PlayerDied { entity_id, killer_id } => {
+                    println!("💀 CLIENT: Player {} morto (killer: {:?})", entity_id, killer_id);
+                }
+
+                NetworkMessage::PlayerRespawn { entity_id, position } => {
+                    println!("♻️  CLIENT: Player {} respawnato a {:?}", entity_id, position);
+                }
+
+                NetworkMessage::ProjectileHit { position, damage } => {
+                    println!("🎯 HIT! Damage: {} at {:?}", damage, position);
+                    
+                    // Spawna un effetto visivo temporaneo
+                    commands.spawn(PbrBundle {
+                        mesh: meshes.add(Sphere::new(0.1)),
+                        material: materials.add(Color::srgb(1.0, 0.0, 0.0)),
+                        transform: Transform::from_translation(position),
+                        ..default()
+                    }).insert(super::weapon::HitMarker {
+                        lifetime: 0.5,
+                        elapsed: 0.0,
+                    });
                 }
                 
                 _ => {}
