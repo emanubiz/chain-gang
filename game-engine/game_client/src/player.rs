@@ -1,14 +1,12 @@
 // game_client/src/player.rs
 
 use bevy::prelude::*;
-// Importa direttamente i tipi necessari da game_shared
 use game_shared::{
     PlayerController, PlayerPhysics, PlayerInput, NetworkMessage,
-    // Importa le costanti del personaggio che servono a spawn_voxel_player
     VOXEL_SCALE, HEAD_SIZE, HEAD_Y_OFFSET, BODY_WIDTH, BODY_DEPTH, BODY_HEIGHT, BODY_Y_OFFSET,
     ARM_WIDTH, ARM_DEPTH, ARM_HEIGHT, ARM_Y_OFFSET, LEG_WIDTH, LEG_DEPTH, LEG_HEIGHT, LEG_Y_OFFSET,
-    PLAYER_HEIGHT, // Per apply_local_prediction
-    apply_player_movement, // Per apply_local_prediction
+    PLAYER_HEIGHT,
+    apply_player_movement,
 };
 use bevy_renet::renet::RenetClient;
 use std::collections::VecDeque;
@@ -18,7 +16,6 @@ use super::camera::CameraRotation;
 #[derive(Resource)]
 pub struct LocalPlayer(pub Entity);
 
-/// Storico degli input inviati (per reconciliation)
 #[derive(Resource, Default)]
 pub struct InputHistory {
     pub inputs: VecDeque<(u32, PlayerInput)>,
@@ -35,7 +32,6 @@ impl InputHistory {
         
         self.inputs.push_back((seq, input_with_seq));
         
-        // Mantieni solo gli ultimi 100 input
         while self.inputs.len() > 100 {
             self.inputs.pop_front();
         }
@@ -67,67 +63,19 @@ pub fn handle_input(
     
     let mut move_direction = Vec2::ZERO;
     
-    // Correzione per invertire i controlli WASD
-    // W (Avanti) dovrebbe aumentare Y
-    // S (Indietro) dovrebbe diminuire Y
-    // A (Sinistra) dovrebbe diminuire X
-    // D (Destra) dovrebbe aumentare X
-
     if keyboard.pressed(KeyCode::KeyW) {
-        move_direction.y += 1.0; // W dovrebbe muovere in avanti
+        move_direction.y += 1.0;
     }
     if keyboard.pressed(KeyCode::KeyS) {
-        move_direction.y -= 1.0; // S dovrebbe muovere all'indietro
+        move_direction.y -= 1.0;
     }
     if keyboard.pressed(KeyCode::KeyA) {
-        move_direction.x -= 1.0; // A dovrebbe muovere a sinistra
+        move_direction.x -= 1.0;
     }
     if keyboard.pressed(KeyCode::KeyD) {
-        move_direction.x += 1.0; // D dovrebbe muovere a destra
+        move_direction.x += 1.0;
     }
     
-    // Se i controlli erano completamente invertiti rispetto a questi,
-    // potresti aver bisogno di invertire i segni di tutti i += 1.0 e -= 1.0
-    // O più semplicemente, scambiare i valori:
-    /*
-    if keyboard.pressed(KeyCode::KeyW) {
-        move_direction.y -= 1.0; // Se W andava indietro
-    }
-    if keyboard.pressed(KeyCode::KeyS) {
-        move_direction.y += 1.0; // Se S andava avanti
-    }
-    if keyboard.pressed(KeyCode::KeyA) {
-        move_direction.x += 1.0; // Se A andava a destra
-    }
-    if keyboard.pressed(KeyCode::KeyD) {
-        move_direction.x -= 1.0; // Se D andava a sinistra
-    }
-    */
-    // La versione sopra è quella che dovrebbe già essere corretta per WASD standard.
-    // Se la tua descrizione significa che i segni di default sono sbagliati, allora sono già a posto.
-    // Se invece i tasti stessi sono scambiati (cioè premi W e vai con S), allora devi SCAMBIARE le righe:
-
-    /*
-    // Esempio se W va indietro e S va avanti:
-    if keyboard.pressed(KeyCode::KeyW) {
-        move_direction.y -= 1.0; // W va indietro
-    }
-    if keyboard.pressed(KeyCode::KeyS) {
-        move_direction.y += 1.0; // S va avanti
-    }
-    // Esempio se A va a destra e D va a sinistra:
-    if keyboard.pressed(KeyCode::KeyA) {
-        move_direction.x += 1.0; // A va a destra
-    }
-    if keyboard.pressed(KeyCode::KeyD) {
-        move_direction.x -= 1.0; // D va a sinistra
-    }
-    */
-    // Ho lasciato la versione standard corretta in cui W=+Y, S=-Y, A=-X, D=+X.
-    // Se la tua esperienza è che sono invertiti *rispetto a questa*, allora la versione
-    // che hai postato è quella giusta per i controlli standard.
-    // Se invece significa che premi W e l'input Y diventa -1.0, allora il problema è a monte.
-
     if move_direction.length() > 0.0 {
         move_direction = move_direction.normalize();
     }
@@ -185,8 +133,6 @@ pub fn spawn_voxel_player(
     position: Vec3,
     base_color: Color,
 ) -> Entity {
-    // Tutte le costanti del personaggio sono importate da game_shared
-
     let style_variants = [
         (
             Color::srgb(0.96, 0.82, 0.70),
@@ -229,7 +175,11 @@ pub fn spawn_voxel_player(
     let pants_mat = materials.add(pants_color);
     let shoe_mat = materials.add(Color::srgb(0.95, 0.95, 0.95));
     let accessory_mat = materials.add(Color::srgb(0.1, 0.1, 0.1));
+    let weapon_mat = materials.add(Color::srgb(0.15, 0.15, 0.18));
+    let weapon_detail_mat = materials.add(Color::srgb(0.8, 0.1, 0.1));
 
+    // CORREZIONE: Il parent ora è a Y=0 (piedi a terra)
+    // Gli offset dei componenti partono da 0 verso l'alto
     let parent = commands.spawn((
         SpatialBundle {
             transform: Transform::from_translation(position),
@@ -334,6 +284,7 @@ pub fn spawn_voxel_player(
         ..default()
     }).id();
 
+    // BRACCIO SINISTRO
     let arm_offset_x = BODY_WIDTH / 2.0 + ARM_WIDTH / 2.0;
     commands.spawn(PbrBundle {
         mesh: meshes.add(Cuboid::new(ARM_WIDTH, ARM_HEIGHT, ARM_DEPTH)),
@@ -342,13 +293,37 @@ pub fn spawn_voxel_player(
         ..default()
     }).set_parent(body);
 
-    commands.spawn(PbrBundle {
+    // BRACCIO DESTRO con ARMA
+    let right_arm = commands.spawn(PbrBundle {
         mesh: meshes.add(Cuboid::new(ARM_WIDTH, ARM_HEIGHT, ARM_DEPTH)),
         material: shirt_mat.clone(),
         transform: Transform::from_xyz(arm_offset_x, ARM_Y_OFFSET, 0.0),
         ..default()
-    }).set_parent(body);
+    }).id();
 
+    // ARMA attaccata al braccio destro
+    let weapon = commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(0.12, 0.06, 0.4)),
+        material: weapon_mat,
+        // Posizione relativa al braccio destro
+        transform: Transform::from_xyz(0.0, -ARM_HEIGHT/2.0 + 0.1, 0.3)
+            .with_rotation(Quat::from_rotation_x(-0.3)), // Inclinata leggermente
+        ..default()
+    }).id();
+    
+    // Mirino dell'arma
+    let sight = commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::new(0.04, 0.04, 0.04)),
+        material: weapon_detail_mat,
+        transform: Transform::from_xyz(0.0, 0.05, -0.15),
+        ..default()
+    }).id();
+    
+    commands.entity(weapon).add_child(sight);
+    commands.entity(right_arm).add_child(weapon);
+    commands.entity(body).add_child(right_arm);
+
+    // GAMBE
     let leg_offset_x = BODY_WIDTH * 0.25;
     commands.spawn(PbrBundle {
         mesh: meshes.add(Cuboid::new(LEG_WIDTH, LEG_HEIGHT, LEG_DEPTH)),
@@ -364,6 +339,7 @@ pub fn spawn_voxel_player(
         ..default()
     }).set_parent(body);
 
+    // SCARPE a terra (Y=0)
     let shoe_height = 0.10;
     let shoe_platform = 0.04;
     

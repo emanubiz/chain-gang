@@ -61,31 +61,14 @@ pub fn setup_level(
     });
 
     // Camera con FOV aumentato (per una visuale più ampia)
-    let camera = commands.spawn(Camera3dBundle {
+    commands.spawn(Camera3dBundle {
         projection: Projection::Perspective(PerspectiveProjection {
             fov: 90.0_f32.to_radians(), // Aumentato a 90 gradi
             ..default()
         }),
         transform: Transform::from_xyz(0.0, 2.0, 0.0), // Posizione iniziale
         ..default()
-    }).id();
+    });
     
-    // Arma
-    let weapon = commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(0.12, 0.06, 0.35)),
-        material: materials.add(Color::srgb(0.15, 0.15, 0.18)),
-        transform: Transform::from_xyz(0.35, -0.25, -0.5), // Posizione arma rispetto alla camera
-        ..default()
-    }).id();
-    
-    // Mirino arma
-    let sight = commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::new(0.04, 0.04, 0.04)),
-        material: materials.add(Color::srgb(0.8, 0.1, 0.1)),
-        transform: Transform::from_xyz(0.0, 0.05, -0.12),
-        ..default()
-    }).id();
-    
-    commands.entity(weapon).add_child(sight);
-    commands.entity(camera).add_child(weapon);
+    // ARMA RIMOSSA DALLA CAMERA - Ora sarà sul braccio del personaggio
 }
