@@ -119,9 +119,22 @@ fn handle_server_events(
             ServerEvent::ClientConnected { client_id } => {
                 let client_id_u64 = client_id.raw();
                 println!("✅ SERVER: Client {} connesso!", client_id_u64);
-                
+
+                // Spawn in posizioni diverse per evitare sovrapposizioni
+                let spawn_points = [
+                    Vec3::new(  0.0, 2.0,   0.0),
+                    Vec3::new( 10.0, 2.0,  10.0),
+                    Vec3::new(-10.0, 2.0, -10.0),
+                    Vec3::new( 10.0, 2.0, -10.0),
+                    Vec3::new(-10.0, 2.0,  10.0),
+                    Vec3::new(  5.0, 2.0, -15.0),
+                    Vec3::new( -5.0, 2.0,  15.0),
+                    Vec3::new( 15.0, 2.0,   0.0),
+                ];
+                let spawn_pos = spawn_points[player_registry.map.len() % spawn_points.len()];
+
                 let player_entity = commands.spawn((
-                    Transform::from_xyz(0.0, 2.0, 0.0),
+                    Transform::from_translation(spawn_pos),
                     PlayerController::default(),
                     PlayerPhysics::default(),
                     PlayerHealth::default(),
@@ -202,7 +215,7 @@ fn handle_player_inputs(
             if let Ok(NetworkMessage::PlayerInput(input)) = bincode::deserialize::<NetworkMessage>(&message) {
                 if let Some(&player_entity) = player_registry.map.get(&client_id_u64) {
                     if let Ok((mut transform, mut physics, mut controller)) = query.get_mut(player_entity) {
-                        controller.grounded = transform.translation.y <= PLAYER_HEIGHT / 2.0 + 0.01;
+                        controller.grounded = transform.translation.y <= 0.01;
                         
                         game_shared::apply_player_movement(
                             &input,
@@ -245,34 +258,42 @@ fn handle_shooting(
         let mut closest_hit: Option<(Entity, Vec3, f32)> = None;
         let mut min_distance = f32::MAX;
 
+        let ray_dir = direction.normalize();
+
         for (target_transform, _, target_player) in player_query.iter() {
             if target_player.id == shooter_id {
                 continue;
             }
 
-            let to_target = target_transform.translation - origin;
+            // Usa il CENTRO del corpo come bersaglio, non i piedi
+            let target_center = target_transform.translation + Vec3::Y * (PLAYER_HEIGHT / 2.0);
+            let to_target = target_center - origin;
             let distance = to_target.length();
 
             if distance > stats.range {
                 continue;
             }
 
-            let dot = direction.normalize().dot(to_target.normalize());
-            if dot < 0.95 {
+            // Solo proiettili che vanno in avanti (non indietro)
+            let t = to_target.dot(ray_dir).max(0.0);
+            // Punto più vicino sul raggio al centro del bersaglio
+            let closest_on_ray = origin + ray_dir * t;
+            let distance_to_ray = (target_center - closest_on_ray).length();
+
+            // Raggio colpo: 0.65m (generoso per buona giocabilità)
+            let hit_radius = 0.65;
+            if distance_to_ray > hit_radius {
                 continue;
             }
 
-            let closest_point = origin + direction.normalize() * distance;
-            let distance_to_ray = (target_transform.translation - closest_point).length();
-
-            if distance_to_ray < PLAYER_HEIGHT && distance < min_distance {
+            if distance < min_distance {
                 min_distance = distance;
                 closest_hit = Some((
                     player_registry.map.iter()
                         .find(|(_, &e)| player_query.get(e).map(|(_, _, p)| p.id) == Ok(target_player.id))
                         .map(|(_, &e)| e)
                         .unwrap(),
-                    target_transform.translation,
+                    target_center,
                     stats.damage
                 ));
             }
@@ -327,13 +348,23 @@ fn check_player_deaths(
                 server.broadcast_message(0, data);
             }
 
+            // Respawn in posizione casuale tra quelle disponibili
+            let respawn_points = [
+                Vec3::new(  0.0, 2.0,   0.0),
+                Vec3::new( 10.0, 2.0,  10.0),
+                Vec3::new(-10.0, 2.0, -10.0),
+                Vec3::new( 10.0, 2.0, -10.0),
+                Vec3::new(-10.0, 2.0,  10.0),
+            ];
+            let respawn_pos = respawn_points[(entity.index() as usize) % respawn_points.len()];
+
             commands.entity(entity)
                 .insert(PlayerHealth::default())
-                .insert(Transform::from_xyz(0.0, 2.0, 0.0));
+                .insert(Transform::from_translation(respawn_pos));
 
             let respawn_msg = NetworkMessage::PlayerRespawn {
                 entity_id: entity.index() as u64,
-                position: Vec3::new(0.0, 2.0, 0.0),
+                position: respawn_pos,
             };
             if let Ok(data) = bincode::serialize(&respawn_msg) {
                 server.broadcast_message(0, data);
@@ -346,8 +377,9 @@ fn apply_player_physics(
     mut query: Query<(&mut Transform, &mut PlayerPhysics, &mut PlayerController)>,
 ) {
     for (mut transform, mut physics, mut controller) in query.iter_mut() {
-        if transform.translation.y <= PLAYER_HEIGHT / 2.0 {
-            transform.translation.y = PLAYER_HEIGHT / 2.0;
+        // Y=0 = piedi a terra (pavimento top surface = Y=0)
+        if transform.translation.y <= 0.0 {
+            transform.translation.y = 0.0;
             physics.velocity.y = 0.0;
             controller.grounded = true;
         } else {
@@ -366,7 +398,8 @@ fn apply_cube_physics(
         body.velocity.y += body.gravity * dt;
         transform.translation += body.velocity * dt;
         
-        let ground_level = 0.5 + collider.half_extents.y;
+        // Pavimento top = Y=0; cubo si ferma quando bottom tocca Y=0
+        let ground_level = collider.half_extents.y;
         
         if transform.translation.y <= ground_level {
             transform.translation.y = ground_level;

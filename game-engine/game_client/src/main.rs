@@ -40,6 +40,7 @@ fn main() {
         .insert_resource(camera::CameraRotation::default())
         .insert_resource(camera::CameraSettings::default())
         .insert_resource(hud::PlayerHealthUI::default())
+        .insert_resource(hud::HitMarkerUI::default())
 
         .add_systems(Startup, (
             level::setup_level,
@@ -55,11 +56,15 @@ fn main() {
             player::handle_input,
             player::apply_local_prediction,
             camera::update_camera_position,
+            weapon::setup_fps_weapon,
             weapon::handle_shooting,
             weapon::update_projectiles,
             weapon::cleanup_muzzle_flash,
             weapon::cleanup_hit_markers,
+            weapon::update_hit_sparks,
+            weapon::update_damage_numbers,
             hud::update_health_ui,
+            hud::update_hit_marker,
             debug::client_tick,
         ).chain())
         .run();

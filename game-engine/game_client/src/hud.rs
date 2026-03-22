@@ -8,6 +8,10 @@ pub struct HealthBar;
 #[derive(Component)]
 pub struct HealthText;
 
+/// Marker per il testo del danno (hit marker centrato)
+#[derive(Component)]
+pub struct HitMarker;
+
 #[derive(Resource)]
 pub struct PlayerHealthUI {
     pub current: f32,
@@ -23,8 +27,16 @@ impl Default for PlayerHealthUI {
     }
 }
 
+/// Stato del hit marker (aggiornato dalla rete quando arriva ProjectileHit)
+#[derive(Resource, Default)]
+pub struct HitMarkerUI {
+    pub damage: f32,
+    pub elapsed: f32,
+    pub active: bool,
+}
+
 pub fn setup_hud(mut commands: Commands) {
-    // Root UI container
+    // ── Barra vita (angolo in alto a sinistra) ────────────────────────────────
     commands.spawn(NodeBundle {
         style: Style {
             width: Val::Percent(100.0),
@@ -36,7 +48,6 @@ pub fn setup_hud(mut commands: Commands) {
         },
         ..default()
     }).with_children(|parent| {
-        // Health container
         parent.spawn(NodeBundle {
             style: Style {
                 flex_direction: FlexDirection::Column,
@@ -44,7 +55,7 @@ pub fn setup_hud(mut commands: Commands) {
             },
             ..default()
         }).with_children(|parent| {
-            // Health text
+            // Testo HP
             parent.spawn((
                 TextBundle::from_section(
                     "HP: 100/100",
@@ -57,7 +68,7 @@ pub fn setup_hud(mut commands: Commands) {
                 HealthText,
             ));
 
-            // Health bar background
+            // Background barra
             parent.spawn(NodeBundle {
                 style: Style {
                     width: Val::Px(200.0),
@@ -70,7 +81,7 @@ pub fn setup_hud(mut commands: Commands) {
                 border_color: BorderColor(Color::WHITE),
                 ..default()
             }).with_children(|parent| {
-                // Health bar fill
+                // Fill verde
                 parent.spawn((
                     NodeBundle {
                         style: Style {
@@ -86,6 +97,36 @@ pub fn setup_hud(mut commands: Commands) {
             });
         });
     });
+
+    // ── Hit marker centrato (danno inflitto) ──────────────────────────────────
+    commands.spawn(NodeBundle {
+        style: Style {
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            position_type: PositionType::Absolute,
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            ..default()
+        },
+        ..default()
+    }).with_children(|parent| {
+        parent.spawn((
+            TextBundle::from_section(
+                "",
+                TextStyle {
+                    font_size: 44.0,
+                    // alpha=0 → invisibile di default
+                    color: Color::srgba(1.0, 0.3, 0.0, 0.0),
+                    ..default()
+                },
+            )
+            .with_style(Style {
+                margin: UiRect::bottom(Val::Px(60.0)), // leggermente sopra il centro
+                ..default()
+            }),
+            HitMarker,
+        ));
+    });
 }
 
 pub fn update_health_ui(
@@ -94,15 +135,39 @@ pub fn update_health_ui(
     mut health_text_query: Query<&mut Text, With<HealthText>>,
 ) {
     if health.is_changed() {
-        // Update bar width
         if let Ok(mut style) = health_bar_query.get_single_mut() {
             let percentage = (health.current / health.max) * 100.0;
             style.width = Val::Percent(percentage);
         }
-
-        // Update text
         if let Ok(mut text) = health_text_query.get_single_mut() {
             text.sections[0].value = format!("HP: {:.0}/{:.0}", health.current, health.max);
+        }
+    }
+}
+
+/// Aggiorna il testo danno: appare, poi sfuma in 0.9s
+pub fn update_hit_marker(
+    mut hit_marker: ResMut<HitMarkerUI>,
+    mut query: Query<&mut Text, With<HitMarker>>,
+    time: Res<Time>,
+) {
+    if !hit_marker.active {
+        return;
+    }
+
+    let total = 0.9_f32;
+    hit_marker.elapsed += time.delta_seconds();
+
+    if let Ok(mut text) = query.get_single_mut() {
+        let alpha = ((total - hit_marker.elapsed) / total).clamp(0.0, 1.0);
+        text.sections[0].value = format!("-{:.0}", hit_marker.damage);
+        text.sections[0].style.color = Color::srgba(1.0, 0.3, 0.0, alpha);
+    }
+
+    if hit_marker.elapsed >= total {
+        hit_marker.active = false;
+        if let Ok(mut text) = query.get_single_mut() {
+            text.sections[0].style.color = Color::srgba(1.0, 0.3, 0.0, 0.0);
         }
     }
 }

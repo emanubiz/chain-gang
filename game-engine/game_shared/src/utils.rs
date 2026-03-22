@@ -3,7 +3,6 @@
 use bevy::prelude::*;
 use crate::components::{PlayerController, PlayerPhysics};
 use crate::network_messages::PlayerInput;
-use crate::character_constants::PLAYER_HEIGHT;
 
 /// Funzione condivisa per applicare il movimento del giocatore
 pub fn apply_player_movement(
@@ -42,9 +41,10 @@ pub fn apply_player_movement(
     // Applica velocità alla posizione
     transform.translation += physics.velocity * dt;
     
-    // Controllo collisione con il pavimento (semplificato)
-    if transform.translation.y <= PLAYER_HEIGHT / 2.0 {
-        transform.translation.y = PLAYER_HEIGHT / 2.0;
+    // Controllo collisione con il pavimento
+    // parent entity a Y=0 = piedi a terra (pavimento top = Y=0)
+    if transform.translation.y <= 0.0 {
+        transform.translation.y = 0.0;
         physics.velocity.y = 0.0;
     }
 }
