@@ -5,7 +5,7 @@ use bevy::window::{CursorGrabMode, PrimaryWindow};
 use game_shared::PlayerController;
 use super::player::LocalPlayer;
 
-/// Altezza occhi del giocatore (dal suolo)
+/// Eye height of the player (from ground)
 pub const EYE_HEIGHT: f32 = 1.60;
 
 #[derive(Resource)]
@@ -25,11 +25,11 @@ impl Default for CameraRotation {
     }
 }
 
-// Mantenuto per compatibilità con main.rs (insert_resource)
+// Kept for compatibility with main.rs (insert_resource)
 #[derive(Resource, Default)]
 pub struct CameraSettings;
 
-/// Grab/release del mouse
+/// Grab/release the mouse
 pub fn toggle_mouse_grab(
     keyboard: Res<ButtonInput<KeyCode>>,
     mouse_button: Res<ButtonInput<bevy::input::mouse::MouseButton>>,
@@ -50,7 +50,7 @@ pub fn toggle_mouse_grab(
     }
 }
 
-/// Mouse look — aggiorna yaw/pitch
+/// Mouse look — update yaw/pitch
 pub fn handle_mouse_look(
     mut camera_rotation: ResMut<CameraRotation>,
     mut mouse_motion: EventReader<bevy::input::mouse::MouseMotion>,
@@ -73,7 +73,7 @@ pub fn handle_mouse_look(
     }
 }
 
-/// Camera FPS: posizionata a livello occhi, guarda dove punta il mouse
+/// FPS Camera: positioned at eye level, looks where mouse points
 pub fn update_camera_position(
     local_player: Option<Res<LocalPlayer>>,
     player_query: Query<&Transform, With<PlayerController>>,
@@ -83,11 +83,11 @@ pub fn update_camera_position(
     if let Some(local_player) = local_player {
         if let Ok(player_transform) = player_query.get(local_player.0) {
             if let Ok(mut camera_transform) = camera_query.get_single_mut() {
-                // Posizione occhi: piedi + EYE_HEIGHT
+                // Eye position: feet + EYE_HEIGHT
                 camera_transform.translation =
                     player_transform.translation + Vec3::Y * EYE_HEIGHT;
 
-                // Rotazione diretta: yaw orizzontale, pitch verticale
+                // Direct rotation: yaw horizontal, pitch vertical
                 camera_transform.rotation =
                     Quat::from_rotation_y(camera_rotation.yaw)
                     * Quat::from_rotation_x(camera_rotation.pitch);

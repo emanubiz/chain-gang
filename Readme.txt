@@ -1,209 +1,208 @@
-# PROGETTO: CHAIN GANG
+# PROJECT: CHAIN GANG
 
-## DESCRIZIONE GLOBALE DEL GIOCO
+## GLOBAL GAME DESCRIPTION
 
-CHAIN GANG è uno sparatutto in prima persona (FPS) tattico a squadre cross-platform (Web & Mobile) con un'estetica Voxel/low-poly. 
+CHAIN GANG is a tactical first-person shooter (FPS) team-based cross-platform (Web & Mobile) with a Voxel/low-poly aesthetic.
 
-### Modalità di Gioco
-*   **1v1 fino a 4v4** - Da duelli 1v1 a battaglie 4v4 a squadre
-*   **Modalità Pratica** - Gioco libero senza scommesse per allenamento e divertimento
-*   **Modalità Scommessa** - Match competitivi con posta in palio on-chain
+### Game Modes
+*   **1v1 up to 4v4** - From 1v1 duels to 4v4 team battles
+*   **Practice Mode** - Free play without betting for training and fun
+*   **Betting Mode** - Competitive matches with on-chain stake
 
-### Meccanica DeFi (Modalità Scommessa)
-Le squadre bloccano una posta in gioco (in xDAI) su uno Smart Contract Gnosis prima di un match. Il gameplay è skill-based, con fuoco amico e fisica dei proiettili. Al termine del match, la squadra vincitrice riceve una prova crittografica dal server per sbloccare immediatamente e in modo trustless l'intero montepremi sul proprio wallet, eliminando intermediari.
+### DeFi Mechanics (Betting Mode)
+Teams lock a stake (in xDAI) in a Gnosis Smart Contract before a match. Gameplay is skill-based, with friendly fire and bullet physics. At the end of the match, the winning team receives a cryptographic proof from the server to immediately and trustlessly unlock the entire prize pool on their wallet, eliminating intermediaries.
 
-## MASTER PLAN (Roadmap Globale)
+## MASTER PLAN (Global Roadmap)
 
-Il progetto procederà per fasi "giocabili" per costruire gradualmente il gioco completo.
+The project will proceed in "playable" phases to gradually build the complete game.
 
-*   **FASE 1: Il Core del Gioco (Rust/Bevy)**
-    *   **Obiettivo:** Creare un FPS multiplayer funzionante con movimento, shooting e fisica.
-    *   **Tecnologie:** Rust, Bevy Engine, bevy_renet (networking)
-    *   **Stato:** IN CORSO - Step 1.3 completato ✅
+*   **PHASE 1: The Game Core (Rust/Bevy)**
+    *   **Objective:** Create a functional multiplayer FPS with movement, shooting and physics.
+    *   **Technologies:** Rust, Bevy Engine, bevy_renet (networking)
+    *   **Status:** IN PROGRESS - Step 1.3 completed ✅
 
-*   **FASE 2: L'Integrazione Web (WASM + React)**
-    *   **Obiettivo:** Far girare il gioco dentro il browser (WASM) e creare l'interfaccia React attorno (Chat, Menu principale).
+*   **PHASE 2: Web Integration (WASM + React)**
+    *   **Objective:** Run the game in the browser (WASM) and create the React interface around it (Chat, Main Menu).
 
-*   **FASE 3: L'Infrastruttura Multiplayer (Redis + Matchmaking)**
-    *   **Obiettivo:** Gestire le room dinamiche e il matchmaking per assegnare i giocatori a stanze libere.
+*   **PHASE 3: Multiplayer Infrastructure (Redis + Matchmaking)**
+    *   **Objective:** Manage dynamic rooms and matchmaking to assign players to available rooms.
 
-*   **FASE 4: La DeFi (Smart Contracts)**
-    *   **Obiettivo:** Scrivere e testare i contratti di Escrow su Gnosis. Integrare il wallet login e le interazioni DeFi.
+*   **PHASE 4: DeFi (Smart Contracts)**
+    *   **Objective:** Write and test escrow contracts on Gnosis. Integrate wallet login and DeFi interactions.
 
-*   **FASE 5: Il "Glue" (Incollare tutto)**
-    *   **Obiettivo:** Finalizzare l'integrazione tra server di gioco (firma della vittoria), frontend (sblocco dei fondi) e contratti blockchain.
+*   **PHASE 5: The "Glue" (Putting it all together)**
+    *   **Objective:** Finalize integration between game server (victory proof), frontend (funds unlock) and blockchain contracts.
 
-## STRUTTURA DEL WORKSPACE (Monorepo)
+## WORKSPACE STRUCTURE (Monorepo)
 
 ```
 chain-gang/
 │
 ├── 📂 contracts/              (BLOCKCHAIN LAYER)
-│   │ # Smart Contract Solidity (Gnosis)
-│   ├── contracts/             # File .sol
-│   ├── test/                  # Test dei contratti
+│   │ # Solidity Smart Contract (Gnosis)
+│   ├── contracts/             # .sol files
+│   ├── test/                  # Contract tests
 │   └── hardhat.config.js
 │
 ├── 📂 web-portal/             (FRONTEND LAYER - React)
-│   │ # Il sito web che l'utente visita
-│   ├── src/                   # React, connessione Wallet, UI
-│   ├── public/                # Qui verrà copiato il .wasm del gioco
+│   │ # The website the user visits
+│   ├── src/                   # React, Wallet connection, UI
+│   ├── public/                # Where the .wasm game will be copied
 │   └── package.json
 │
 ├── 📂 game-engine/            (GAME LAYER - Rust Workspace)
-│   │ # Il cuore del gioco (Client e Server)
-│   ├── Cargo.toml             # Workspace Rust
+│   │ # The heart of the game (Client and Server)
+│   ├── Cargo.toml             # Rust Workspace
 │   │
-│   ├── 📦 game_shared/        # Logica condivisa (Protocollo, Messaggi di rete)
+│   ├── 📦 game_shared/        # Shared Logic (Protocol, Network Messages)
 │   │   └── src/lib.rs         # PlayerInput, NetworkMessage, apply_player_movement()
 │   │
-│   ├── 📦 game_server/        # Il Server Autoritativo (Linux Binary)
-│   │   └── src/main.rs        # Gestione connessioni, fisica server-side, sync
+│   ├── 📦 game_server/        # The Authoritative Server (Linux Binary)
+│   │   └── src/main.rs        # Connection handling, server-side physics, sync
 │   │
-│   └── 📦 game_client/        # Il Gioco Visuale (WASM target)
+│   └── 📦 game_client/        # The Visual Game (WASM target)
 │       └── src/main.rs        # Client-side prediction, rendering, input
 │
 └── 📂 infrastructure/         (OPS LAYER)
     └── docker-compose.yml
 ```
 
-## ROADMAP LOCALE (Fase 1: Game Engine)
+## LOCAL ROADMAP (Phase 1: Game Engine)
 
 ### ✅ Step 1.1 - Networking Skeleton
-*   Setup del workspace Rust (3 crate: shared, server, client)
-*   Server che ascolta su porta 5000
-*   Client che si connette
-*   Scambio di eventi di connessione/disconnessione tramite `bevy_renet`
-*   **STATO: COMPLETATO** ✅
+*   Rust workspace setup (3 crates: shared, server, client)
+*   Server listening on port 5000
+*   Client connecting
+*   Connection/disconnection event exchange via `bevy_renet`
+*   **STATUS: COMPLETED** ✅
 
-### ✅ Step 1.2 - Synchronized Physics (Il Cubo)
-*   Integrazione di fisica manuale (no bevy_rapier per semplicità)
-*   Il server spawna un cubo che cade e rimbalza
-*   Il server invia posizione/rotazione del cubo ai client tramite `NetworkMessage::RigidBodyUpdate`
-*   Il client visualizza il cubo sincronizzato
-*   Fix del `transport.send_packets()` per inviare effettivamente i pacchetti UDP
-*   **STATO: COMPLETATO** ✅
+### ✅ Step 1.2 - Synchronized Physics (The Cube)
+*   Manual physics integration (no bevy_rapier for simplicity)
+*   Server spawns a cube that falls and bounces
+*   Server sends cube position/rotation to clients via `NetworkMessage::RigidBodyUpdate`
+*   Client displays the synchronized cube
+*   Fix of `transport.send_packets()` to actually send UDP packets
+*   **STATUS: COMPLETED** ✅
 
 ### ✅ Step 1.3 - Player Movement (Client-Side Prediction)
-*   **Input del giocatore:** WASD per muoversi, Spazio per saltare
-*   **Client-Side Prediction:** Il movimento è applicato IMMEDIATAMENTE sul client per zero lag percepito
-*   **Server Autoritativo:** Il server riceve gli input, li processa e invia lo stato aggiornato
-*   **Reconciliation:** Il client corregge la sua posizione quando riceve aggiornamenti dal server
-*   **Funzione condivisa:** `apply_player_movement()` usata sia da client che server per garantire coerenza
-*   **Multi-player:** Spawn di giocatori multipli (verde per locale, rosso per remoti)
-*   **STATO: COMPLETATO** ✅
+*   **Player Input:** WASD to move, Space to jump
+*   **Client-Side Prediction:** Movement applied IMMEDIATELY on client for zero perceived lag
+*   **Server Authoritative:** Server receives inputs, processes them and sends updated state
+*   **Reconciliation:** Client corrects its position when receiving server updates
+*   **Shared Function:** `apply_player_movement()` used by both client and server to ensure consistency
+*   **Multi-player:** Multiple player spawns (green for local, red for remote)
+*   **STATUS: COMPLETED** ✅
 
 ### 🚧 Step 1.4 - Player Experience Refinement
-*   **Obiettivo:** Migliorare la sensazione di gioco e la fluidità
-    *   **Rotazione della camera** (mouse look) - Controllo First Person
-    *   **Camera che segue il giocatore** - Vista FPS
-    *   **Interpolazione** dei giocatori remoti per movimento fluido (no teleport)
-    *   **Riapplicazione degli input pendenti** dopo reconciliation per prediction perfetta
-*   **STATO: IN CORSO** 🎯
+*   **Objective:** Improve game feel and fluidity
+*       *   **Camera Rotation** (mouse look) - First Person Control
+*       *   **Camera Following Player** - FPS View
+*       *   **Interpolation** of remote players for smooth movement (no teleport)
+*       *   **Reapplication of pending inputs** after reconciliation for perfect prediction
+*   **STATUS: IN PROGRESS** 🎯
 
 ### 📋 Step 1.5 - Voxel & Shooting
-*   Generazione di un ambiente voxel di base
-*   Logica dello sparo (Raycasting)
-*   Rimozione del voxel colpito sincronizzata tra tutti i client
-*   Hit detection sui giocatori
-*   Health system e respawn
-*   **STATO: PIANIFICATO**
+*   Basic voxel environment generation
+*   Shooting logic (Raycasting)
+*   Synchronized voxel removal between all clients
+*   Hit detection on players
+*   Health system and respawn
+*   **STATUS: PLANNED**
 
 ### 📋 Step 1.6 - Game Modes
-*   Sistema di lobby per 1v1, 2v2, 3v3, 4v4
-*   Matchmaking per modalità pratica
-*   Timer di match e win conditions
-*   Scoreboard e statistiche partita
-*   **STATO: PIANIFICATO**
+*   Lobby system for 1v1, 2v2, 3v3, 4v4
+*   Matchmaking for practice mode
+*   Match timers and win conditions
+*   Scoreboard and match statistics
+*   **STATUS: PLANNED**
 
-## TECNOLOGIE UTILIZZATE
+## TECHNOLOGIES USED
 
 ### Game Engine
-*   **Rust** - Linguaggio di programmazione (performance + safety)
-*   **Bevy 0.14** - Game Engine ECS (Entity Component System)
+*   **Rust** - Programming language (performance + safety)
+*   **Bevy 0.14** - ECS Game Engine (Entity Component System)
 *   **bevy_renet 0.0.12** - Networking library (client-server)
-*   **bincode** - Serializzazione binaria per messaggi di rete
-*   **serde** - Serializzazione/Deserializzazione
+*   **bincode** - Binary serialization for network messages
+*   **serde** - Serialization/Deserialization
 
-### Frontend (Futuro)
+### Frontend (Future)
 *   **React + TypeScript** - UI framework
 *   **Vite** - Build tool
-*   **Ethers.js** - Interazione con blockchain
+*   **Ethers.js** - Blockchain interaction
 
-### Blockchain (Futuro)
+### Blockchain (Future)
 *   **Solidity** - Smart contracts
 *   **Hardhat** - Development environment
 *   **Gnosis Chain** - Network (xDAI)
 
-## COME ESEGUIRE IL PROGETTO
+## HOW TO RUN THE PROJECT
 
-### Prerequisiti
+### Prerequisites
 ```bash
-# Installa Rust
+# Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Verifica installazione
+# Verify installation
 rustc --version
 cargo --version
 ```
 
-### Esecuzione del Game Engine
+### Running the Game Engine
 
 ```bash
-# Terminal 1 - Avvia il Server
+# Terminal 1 - Start the Server
 cd game-engine
 cargo run --bin game_server
 
-# Terminal 2 - Avvia il Client
+# Terminal 2 - Start the Client
 cargo run --bin game_client
 
-# (Opzionale) Terminal 3 - Secondo client per testare multiplayer
+# (Optional) Terminal 3 - Second client for multiplayer testing
 cargo run --bin game_client
 ```
 
-### Controlli di Gioco
-*   **W** - Avanti
-*   **A** - Sinistra
-*   **S** - Indietro
-*   **D** - Destra
-*   **Spazio** - Salto
+### Game Controls
+*   **W** - Forward
+*   **A** - Left
+*   **S** - Backward
+*   **D** - Right
+*   **Space** - Jump
 
-## NOTE TECNICHE IMPORTANTI
+## IMPORTANT TECHNICAL NOTES
 
-### Architettura di Networking
-*   **Client-Server Autoritativo:** Il server è l'unica fonte di verità
-*   **Client-Side Prediction:** Il client predice il movimento per responsività immediata
-*   **Server Reconciliation:** Quando il server invia lo stato aggiornato, il client corregge eventuali divergenze
-*   **Sequence Numbers:** Ogni input ha un numero di sequenza per tracciare quale input il server ha processato
+### Networking Architecture
+*   **Authoritative Client-Server:** The server is the sole source of truth
+*   **Client-Side Prediction:** Client predicts movement for immediate responsiveness
+*   **Server Reconciliation:** When server sends updated state, client corrects any divergences
+*   **Sequence Numbers:** Each input has a sequence number to track which input the server processed
 
-### Fisica
-*   **Fisica custom:** Implementata manualmente (no bevy_rapier) per controllo totale e compatibilità WASM
-*   **Gravità:** -9.81 m/s²
-*   **Collisione pavimento:** Controllo semplice Y <= PLAYER_HEIGHT/2
-*   **Movimento:** 5.0 m/s di velocità base
-*   **Salto:** 5.0 m/s di forza verticale
+### Physics
+*   **Custom Physics:** Manually implemented (no bevy_rapier) for total control and WASM compatibility
+*   **Gravity:** -9.81 m/s²
+*   **Floor Collision:** Simple Y <= PLAYER_HEIGHT/2 check
+*   **Movement:** 5.0 m/s base speed
+*   **Jump:** 5.0 m/s vertical force
 
-### Messaggi di Rete
-*   **PlayerInput:** Client → Server (input WASD + jump + sequence_number)
-*   **PlayerStateUpdate:** Server → Client (posizione, velocità, rotazione + sequence_number)
-*   **RigidBodyUpdate:** Server → Client (oggetti non-giocatore come il cubo)
-*   **PlayerConnected/Disconnected:** Server → All Clients (notifiche)
+### Network Messages
+*   **PlayerInput:** Client → Server (WASD input + jump + sequence_number)
+*   **PlayerStateUpdate:** Server → Client (position, velocity, rotation + sequence_number)
+*   **RigidBodyUpdate:** Server → Client (non-player objects like the cube)
+*   **PlayerConnected/Disconnected:** Server → All Clients (notifications)
 
-## PROSSIMI PASSI (Immediati)
+## NEXT STEPS (Immediate)
 
-1. ✅ Risolvere errori di compilazione (`ClientId` vs `u64`)
-2. 🎯 Implementare mouse look (rotazione camera)
-3. 🎯 Camera che segue il giocatore
-4. 🎯 Interpolazione dei giocatori remoti
-5. 🎯 Riapplicazione input pendenti (reconciliation completa)
+1. ✅ Resolve compilation errors (`ClientId` vs `u64`)
+2. 🎯 Implement mouse look (camera rotation)
+3. 🎯 Camera that follows the player
+4. 🎯 Interpolation of remote players
+5. 🎯 Reapply pending inputs (complete reconciliation)
 
-## STATO DEL PROGETTO
+## PROJECT STATUS
 
-**Ultimo aggiornamento:** 18 Gennaio 2025  
-**Fase corrente:** FASE 1 - Step 1.3 completato  
-**Prossimo milestone:** Step 1.4 - Player Experience Refinement  
-**Livello di completamento Fase 1:** ~60%
+*   **Current Phase:** PHASE 1 - Step 1.3 completed
+*   **Next Milestone:** Step 1.4 - Player Experience Refinement
+*   **Phase 1 Completion Level:** ~60%
 
 ---
 
-**Note:** Questo progetto è in sviluppo attivo. La documentazione viene aggiornata ad ogni step completato.
+**Note:** This project is under active development. Documentation is updated with each completed step.

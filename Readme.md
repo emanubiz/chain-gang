@@ -1,241 +1,241 @@
 # 🎮 CHAIN GANG
 
-> **Tactical FPS meets DeFi** - Un gioco multiplayer competitivo dove ogni partita ha valore reale.
+> **Tactical FPS meets DeFi** - A competitive multiplayer game where every match has real value.
 
 [![Rust](https://img.shields.io/badge/Rust-1.70+-orange.svg)](https://www.rust-lang.org/)
 [![Bevy](https://img.shields.io/badge/Bevy-0.14-blue.svg)](https://bevyengine.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## 🚀 Cos'è Chain Gang?
+## 🚀 What is Chain Gang?
 
-Chain Gang è uno **sparatutto tattico in prima persona** che unisce il gameplay competitivo skill-based con la blockchain. 
+Chain Gang is a **tactical first-person shooter** that combines skill-based competitive gameplay with blockchain.
 
-### 🎯 Modalità di Gioco
+### 🎯 Game Modes
 
-**📊 Flessibilità:** Da **1v1** a **4v4**
-- 🥊 **1v1** - Duelli intensi uno contro uno
-- 👥 **2v2** - Cooperazione a coppie
-- 🎮 **3v3** - Team tactics classico
-- 🏆 **4v4** - Battaglie a squadre complete
+**📊 Flexibility:** From **1v1** to **4v4**
+- 🥊 **1v1** - Intense one-on-one duels
+- 👥 **2v2** - Pair cooperation
+- 🎮 **3v3** - Classic team tactics
+- 🏆 **4v4** - Complete team battles
 
-**🎲 Due Modalità:**
+**🎲 Two Modes:**
 
-1. **⚡ Modalità Pratica** (Free Play)
-   - Gioco libero senza scommesse
-   - Perfetto per allenamento e divertimento
-   - Matchmaking casual
-   - Zero rischi, solo skill
+1. **⚡ Practice Mode** (Free Play)
+   - Free play without betting
+   - Perfect for training and fun
+   - Casual matchmaking
+   - Zero risk, pure skill
 
-2. **💰 Modalità Scommessa** (Ranked + DeFi)
-   - Match competitivi con posta in palio
-   - Le squadre bloccano xDAI su smart contract
-   - I vincitori ricevono l'intero montepremi immediatamente
-   - **Zero intermediari, 100% trustless**
+2. **💰 Betting Mode** (Ranked + DeFi)
+   - Competitive matches with stake
+   - Teams lock xDAI on smart contracts
+   - Winners receive the full prize pool immediately
+   - **Zero intermediaries, 100% trustless**
 
-### ✨ Feature Principali
+### ✨ Main Features
 
-- 🎯 **FPS Competitivo** - Gameplay skill-based con fisica dei proiettili e fuoco amico
-- 👥 **1v1 fino a 4v4** - Modalità di gioco flessibili per ogni stile
-- 🎲 **Doppia Modalità** - Pratica gratuita + Scommesse on-chain
-- 🌐 **Cross-Platform** - Web (WASM) e Mobile
-- 💰 **DeFi Integrato** - Smart contracts su Gnosis Chain per escrow trustless
-- 🎨 **Estetica Voxel** - Stile low-poly moderno
-- ⚡ **Client-Side Prediction** - Zero input lag percepito
-- 🔒 **Server Autoritativo** - Anti-cheat nativo nell'architettura
+- 🎯 **Competitive FPS** - Skill-based gameplay with bullet physics and friendly fire
+- 👥 **1v1 up to 4v4** - Flexible game modes for every style
+- 🎲 **Dual Mode** - Free practice + On-chain betting
+- 🌐 **Cross-Platform** - Web (WASM) and Mobile
+- 💰 **Integrated DeFi** - Smart contracts on Gnosis Chain for trustless escrow
+- 🎨 **Voxel Aesthetic** - Modern low-poly style
+- ⚡ **Client-Side Prediction** - Zero perceived input lag
+- 🔒 **Authoritative Server** - Native anti-cheat in architecture
 
-## 📦 Struttura del Progetto
+## 📦 Project Structure
 
 ```
 chain-gang/
-├── 🎮 game-engine/        # Core del gioco (Rust + Bevy)
-│   ├── game_shared/       # Logica condivisa client-server
-│   ├── game_server/       # Server autoritativo
-│   └── game_client/       # Client di gioco
-├── ⚛️  web-portal/        # Frontend React + WASM
-├── ⛓️  contracts/         # Smart contracts Solidity
+├── 🎮 game-engine/        # Game core (Rust + Bevy)
+│   ├── game_shared/       # Shared client-server logic
+│   ├── game_server/       # Authoritative server
+│   └── game_client/       # Game client
+├── ⚛️  web-portal/        # React + WASM frontend
+├── ⛓️  contracts/         # Solidity smart contracts
 └── 🐳 infrastructure/    # Docker & deployment
 ```
 
-## 🎯 Stato del Progetto
+## 🎯 Project Status
 
-**Fase Corrente:** FASE 1 - Core del Gioco
+**Current Phase:** PHASE 1 - Game Core
 
-| Step | Descrizione | Stato |
-|------|-------------|-------|
-| 1.1 | Networking Skeleton | ✅ Completato |
-| 1.2 | Synchronized Physics | ✅ Completato |
-| 1.3 | Player Movement & Prediction | ✅ Completato |
-| 1.4 | Player Experience Refinement | 🚧 In Corso |
-| 1.5 | Voxel & Shooting | 📋 Pianificato |
-| 1.6 | Game Modes & Lobby | 📋 Pianificato |
+| Step | Description | Status |
+|------|-------------|--------|
+| 1.1 | Networking Skeleton | ✅ Completed |
+| 1.2 | Synchronized Physics | ✅ Completed |
+| 1.3 | Player Movement & Prediction | ✅ Completed |
+| 1.4 | Player Experience Refinement | 🚧 In Progress |
+| 1.5 | Voxel & Shooting | 📋 Planned |
+| 1.6 | Game Modes & Lobby | 📋 Planned |
 
 **Step 1.4 - Player Experience Refinement:**
-- 🎯 Mouse look (rotazione camera)
-- 🎯 Camera FPS che segue il giocatore
-- 🎯 Interpolazione giocatori remoti (movimento fluido)
-- 🎯 Reconciliation completa (riapplica input pendenti)
+- 🎯 Mouse look (camera rotation)
+- 🎯 FPS camera following the player
+- 🎯 Remote player interpolation (smooth movement)
+- 🎯 Complete reconciliation (reapply pending inputs)
 
 ## 🚀 Quick Start
 
-### Prerequisiti
+### Prerequisites
 
 ```bash
-# Installa Rust
+# Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Verifica installazione
+# Verify installation
 rustc --version
 cargo --version
 ```
 
-### Esecuzione
+### Execution
 
 ```bash
-# Clona il repository
+# Clone the repository
 git clone https://github.com/yourusername/chain-gang.git
 cd chain-gang/game-engine
 
-# Terminal 1: Avvia il server
+# Terminal 1: Start the server
 cargo run --bin game_server
 
-# Terminal 2: Avvia il client
+# Terminal 2: Start the client
 cargo run --bin game_client
 ```
 
-### 🎮 Controlli
+### 🎮 Controls
 
-| Tasto | Azione |
-|-------|--------|
-| **W** | Avanti |
-| **A** | Sinistra |
-| **S** | Indietro |
-| **D** | Destra |
-| **Spazio** | Salto |
+| Key | Action |
+|-----|--------|
+| **W** | Forward |
+| **A** | Left |
+| **S** | Backward |
+| **D** | Right |
+| **Space** | Jump |
 
-## 🎮 Come Funziona
+## 🎮 How It Works
 
-### Modalità Pratica (Free Play)
-
-```
-1. 🔍 Entra in matchmaking
-2. 🎯 Scegli la modalità (1v1, 2v2, 3v3, 4v4)
-3. ⚔️  Gioca e divertiti
-4. 📈 Migliora le tue skill
-```
-
-**Zero rischi, solo divertimento!**
-
-### Modalità Scommessa (Ranked)
+### Practice Mode (Free Play)
 
 ```
-1. 💰 Le squadre bloccano xDAI su smart contract
-   └─ Esempio: 4v4 → 10 xDAI per squadra = 20 xDAI pot
+1. 🔍 Enter matchmaking
+2. 🎯 Choose mode (1v1, 2v2, 3v3, 4v4)
+3. ⚔️  Play and have fun
+4. 📈 Improve your skills
+```
 
-2. 🎮 Il match inizia (server autoritativo)
-   └─ Gameplay skill-based con anti-cheat
+**Zero risk, just fun!**
 
-3. 🏆 La squadra vincente riceve prova crittografica
-   └─ Firma del server verificabile on-chain
+### Betting Mode (Ranked)
 
-4. ⚡ Sblocco immediato del premio (20 xDAI)
-   └─ Trustless, nessun intermediario
-   └─ Distribuito automaticamente ai membri del team
+```
+1. 💰 Teams lock xDAI on smart contract
+   └─ Example: 4v4 → 10 xDAI per team = 20 xDAI pot
+
+2. 🎮 Match starts (authoritative server)
+   └─ Skill-based gameplay with anti-cheat
+
+3. 🏆 Winning team receives cryptographic proof
+   └─ Verifiable server signature on-chain
+
+4. ⚡ Immediate prize unlock (20 xDAI)
+   └─ Trustless, no intermediaries
+   └─ Automatically distributed to team members
 ```
 
 **100% Trustless. 100% Skill-Based.**
 
 ### Networking
 
-Chain Gang utilizza un'architettura **client-server autoritativa** con **client-side prediction**:
+Chain Gang uses an **authoritative client-server architecture** with **client-side prediction**:
 
 ```
 Client                          Server
-  │                               │
-  ├─► PlayerInput (seq: 1) ──────►│
-  │   (predice localmente)        │ Processa input
-  │                               │ Simula fisica
-  │◄── PlayerState (seq: 1) ──────┤ 
-  │   (reconcilia se diverso)     │
-  └─► PlayerInput (seq: 2) ──────►│
+   │                               │
+   ├─► PlayerInput (seq: 1) ──────►│
+   │   (predicts locally)          │ Processes input
+   │                               │ Simulates physics
+   │◄── PlayerState (seq: 1) ──────┤ 
+   │   (reconciles if different)   │
+   └─► PlayerInput (seq: 2) ──────►│
 ```
 
-**Vantaggi:**
-- ✅ Zero input lag percepito
-- ✅ Server autoritativo (anti-cheat)
-- ✅ Supporto per alta latenza
+**Advantages:**
+- ✅ Zero perceived input lag
+- ✅ Authoritative server (anti-cheat)
+- ✅ High latency support
 
 ### Tech Stack
 
 **Game Engine:**
-- **Rust** - Performance e sicurezza della memoria
-- **Bevy 0.14** - ECS game engine moderno
-- **bevy_renet** - Networking UDP ottimizzato
-- **bincode** - Serializzazione efficiente
+- **Rust** - Performance and memory safety
+- **Bevy 0.14** - Modern ECS game engine
+- **bevy_renet** - Optimized UDP networking
+- **bincode** - Efficient serialization
 
-**Blockchain (Futuro):**
+**Blockchain (Future):**
 - **Solidity** - Smart contracts
-- **Gnosis Chain** - xDAI per basse fee
-- **Hardhat** - Testing e deployment
+- **Gnosis Chain** - xDAI for low fees
+- **Hardhat** - Testing and deployment
 
-**Frontend (Futuro):**
-- **React + TypeScript** - UI moderna
-- **WASM** - Game engine nel browser
-- **ethers.js** - Interazione blockchain
+**Frontend (Future):**
+- **React + TypeScript** - Modern UI
+- **WASM** - Game engine in browser
+- **ethers.js** - Blockchain interaction
 
-## 📚 Documentazione
+## 📚 Documentation
 
-- 📖 [Readme.txt](Readme.txt) - Roadmap dettagliata e progresso
+- 📖 [Readme.txt](Readme.txt) - Detailed roadmap and progress
 - 🎮 [Game Design](docs/game-design.md) *(coming soon)*
 - 🔧 [Architecture](docs/architecture.md) *(coming soon)*
 - 💰 [Tokenomics](docs/tokenomics.md) *(coming soon)*
 
 ## 🤝 Contributing
 
-Questo progetto è attualmente in sviluppo attivo. Contributi, suggerimenti e feedback sono benvenuti!
+This project is actively developed. Contributions, suggestions and feedback are welcome!
 
 ```bash
-# Fork il repository
-# Crea un branch per la tua feature
+# Fork the repository
+# Create a branch for your feature
 git checkout -b feature/amazing-feature
 
-# Commit delle modifiche
+# Commit your changes
 git commit -m 'Add amazing feature'
 
-# Push del branch
+# Push the branch
 git push origin feature/amazing-feature
 
-# Apri una Pull Request
+# Open a Pull Request
 ```
 
 ## 📝 License
 
-Questo progetto è rilasciato sotto licenza MIT. Vedi [LICENSE](LICENSE) per dettagli.
+This project is released under the MIT license. See [LICENSE](LICENSE) for details.
 
 ## 🎯 Roadmap
 
-### Q1 2025
+### 
 - ✅ Networking base
 - ✅ Player movement & prediction
-- 🚧 FPS completo con shooting
-- 🚧 Ambiente voxel
+- 🚧 Complete FPS with shooting
+- 🚧 Voxel environment
 
-### Q2 2025
-- 📋 Build WASM del client
-- 📋 React frontend con UI per modalità
-- 📋 Sistema di lobby (1v1 to 4v4)
-- 📋 Smart contracts su testnet (bet mode)
+### 
+- 📋 Build WASM client
+- 📋 React frontend with mode UI
+- 📋 Lobby system (1v1 to 4v4)
+- 📋 Smart contracts on testnet (bet mode)
 
-### Q3 2025
-- 📋 Matchmaking system per practice mode
-- 📋 Ranked matchmaking per bet mode
+### 
+- 📋 Practice mode matchmaking system
+- 📋 Ranked matchmaking for bet mode
 - 📋 Team balancing algorithms
-- 📋 Deployment su Gnosis mainnet
+- 📋 Deployment to Gnosis mainnet
 
-### Q4 2025
+### 
 - 📋 Mobile client
 - 📋 Seasonal tournaments
-- 📋 Leaderboards globali
-- 📋 DAO governance per prize pools
+- 📋 Global leaderboards
+- 📋 DAO governance for prize pools
 
 ## 🔗 Links
 
@@ -246,6 +246,6 @@ Questo progetto è rilasciato sotto licenza MIT. Vedi [LICENSE](LICENSE) per det
 
 ---
 
-**⚠️ Disclaimer:** Questo progetto è in fase di sviluppo attivo. Le feature possono cambiare e il codice potrebbe contenere bug.
+**⚠️ Disclaimer:** This project is in active development. Features may change and the code may contain bugs.
 
-**Ultimo aggiornamento:** 18 Gennaio 2025
+**Last Updated:** January 18, 2025

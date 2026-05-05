@@ -1,57 +1,55 @@
 # Chain Gang — Roadmap
 
-> Aggiornata: 2026-03-22
+---
+
+## ✅ Completed Fixes
+
+- Mouse sensitivity lowered (0.003 → 0.0018)
+- Remote player position lerp (reduces stuttering)
+- Local player correction threshold (reduces micro-jitter from reconciliation)
+- Remote player hidden on death (`Visibility::Hidden`), reappears on respawn
+- Damage numbers visible via centered HUD (old `Text2dBundle` didn't work without `Camera2d`)
+- Hit animation: 3D sparks at impact point + damage number in HUD that fades
 
 ---
 
-## ✅ Fix completati (sessione 2026-03-22)
+## 🔜 Next Priority: Lobby / Room System
 
-- Sensibilità mouse abbassata (0.003 → 0.0018)
-- Lerp posizioni giocatori remoti (riduce stuttering)
-- Threshold correzione giocatore locale (riduce micro-jitter da reconciliation)
-- Giocatore remoto nascosto su morte (`Visibility::Hidden`), riappare al respawn
-- Damage numbers visibili via HUD centrato (il vecchio `Text2dBundle` non funzionava senza `Camera2d`)
-- Hit animation: scintille 3D al punto di impatto + numero danno nel HUD che sfuma
+### A. Web Portal — "Rooms" Page
+- List active rooms: name, connected players / max, status (waiting / in game)
+- "Create Room" and "Join" buttons
+- Each room: unique ID, name, max players (e.g. 4v4), map
+- Communication with game server via REST API or WebSocket
+- On "Join" click: launch client with server_addr + room_id as parameters
 
----
-
-## 🔜 Prossima priorità: Lobby / Room System
-
-### A. Web Portal — Pagina "Rooms"
-- Lista room attive: nome, giocatori connessi / max, stato (in attesa / in gioco)
-- Pulsanti "Crea Room" e "Unisciti"
-- Ogni room: ID univoco, nome, max players (es. 4v4), mappa
-- Comunicazione con game server via API REST o WebSocket
-- Al click "Unisciti": lancia il client con server_addr + room_id come parametro
-
-### B. Client — Schermata di connessione (Bevy)
-- Prima schermata invece di connettersi direttamente all'avvio:
-  - Input IP/porta server
-  - Input username
-  - Pulsante "Connetti" / "Cerca partite"
-- Implementazione: `AppState::Menu` → `AppState::InGame`
-- Il menu può mostrare anche la lista room (se il server espone un endpoint)
+### B. Client — Connection Screen (Bevy)
+- Initial screen instead of connecting directly on startup:
+  - Server IP/port input
+  - Username input
+  - "Connect" / "Find Matches" button
+- Implementation: `AppState::Menu` → `AppState::InGame`
+- Menu can also show room list (if server exposes an endpoint)
 
 ### C. Game Server — Room Management
-- Struttura `Room { id, name, players: Vec<ClientId>, max_players, game_state }`
-- Endpoint REST:
-  - `GET  /rooms`           — lista room
-  - `POST /rooms`           — crea room
-  - `POST /rooms/{id}/join` — entra in room
-- Quando una room è piena → inizia il match automaticamente
-- Quando un giocatore muore: diventa spettatore fino al reset del round
-- Reset round: tutti rispawnati simultaneamente
+- Structure `Room { id, name, players: Vec<ClientId>, max_players, game_state }`
+- REST Endpoints:
+  - `GET  /rooms`           — list rooms
+  - `POST /rooms`           — create room
+  - `POST /rooms/{id}/join` — join room
+- When a room is full → start match automatically
+- When a player dies: becomes spectator until round reset
+- Round reset: all players respawned simultaneously
 
 ---
 
-## 🔮 Feature future (ordine suggerito)
+## 🔮 Suggested Future Features (in order)
 
-| # | Feature | Note |
-|---|---------|------|
-| 1 | **Scoreboard** | Tabella K/D in-game, premi TAB |
-| 2 | **Round system** | N kill per vincere la room, poi reset |
-| 3 | **Modalità spettatore** | Dopo la morte segui un altro giocatore |
-| 4 | **Suoni** | Sparo, hit, passi — `bevy_kira_audio` |
-| 5 | **Animazioni** | Bob arma in FPS, gambe che camminano (remoto) |
-| 6 | **Mappe multiple** | Selezione mappa dalla lobby |
-| 7 | **Statistiche persistenti** | K/D, win/loss su DB (PostgreSQL / SQLite) |
+| # | Feature | Notes |
+|---|---------|-------|
+| 1 | **Scoreboard** | In-game K/D table, press TAB |
+| 2 | **Round system** | N kills to win room, then reset |
+| 3 | **Spectator Mode** | After death follow another player |
+| 4 | **Sounds** | Shot, hit, footsteps — `bevy_kira_audio` |
+| 5 | **Animations** | FPS weapon bob, walking legs (remote) |
+| 6 | **Multiple Maps** | Map selection from lobby |
+| 7 | **Persistent Statistics** | K/D, win/loss on DB (PostgreSQL / SQLite) |
